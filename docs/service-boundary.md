@@ -1,27 +1,44 @@
-# Wallet Service Boundary
+# Service Boundary - bidmart-wallet-service
 
-## Tanggung Jawab
+## Ruang Lingkup Domain
 
-- Menjadi source of truth saldo dan hold.
-- Menyediakan operasi idempotent untuk hold, release, dan capture.
-- Menyimpan ledger transaksi wallet.
+Service ini hanya menangani domain wallet:
 
-## Kontrak Minimal
+- saldo user;
+- hold/release/capture dana;
+- histori transaksi wallet.
 
-```http
-GET /api/wallet/balance
-POST /api/wallet/topup
-GET /api/wallet/transactions
-POST /internal/wallet/holds
-POST /internal/wallet/releases
-POST /internal/wallet/captures
-```
+## Yang Termasuk
 
-Setiap command internal wajib membawa `idempotencyKey`.
+- Wallet aggregate (`availableBalance`, `heldBalance`).
+- Hold aggregate (`holdId`, `userId`, `amount`, `status`).
+- Wallet transaction ledger.
 
-## Risiko yang Harus Ditutup
+## Yang Tidak Termasuk
 
-- Double hold saat retry.
-- Wallet hold berhasil tetapi bid gagal.
-- Bid berhasil tetapi release previous leader gagal.
-- Dual source saldo antara user dan wallet table.
+- Validasi bisnis listing/auction.
+- Penentuan winner bidding.
+- Otentikasi/otorisasi user.
+- Notification dispatch.
+
+## API Boundary
+
+### Public-ish
+
+- `GET /wallets/{userId}/balance`
+- `POST /wallets/{userId}/top-up`
+- `POST /wallets/{userId}/withdraw`
+- `GET /wallets/{userId}/transactions`
+
+### Internal antar-service
+
+- `POST /wallets/{userId}/holds`
+- `POST /wallets/{userId}/holds/{holdId}/release`
+- `POST /wallets/{userId}/holds/{holdId}/capture`
+
+## Idempotency & Consistency Notes
+
+- Hold/release/capture wajib idempotent karena command service bisa retry.
+- Pada fase bootstrap ini idempotency disimpan in-memory (sementara).
+- TODO produksi: simpan idempotency record persisten + TTL + unique index.
+- TODO produksi: outbox/inbox pattern agar sinkron dengan event auction.
