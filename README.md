@@ -1,27 +1,27 @@
 # BidMart Wallet Service
 
-`bidmart-wallet-service` adalah microservice untuk domain saldo dan wallet lifecycle pada BidMart. Service ini dipisahkan dari monolith `Bidmart` (branch sumber: `feat/auction-query-rollout`) dengan pendekatan strangler pattern agar migrasi bisa bertahap tanpa mematikan sistem lama.
+`bidmart-wallet-service` adalah source of truth saldo wallet BidMart.
 
-## Fungsi Utama
+## Domain Tanggung Jawab
 
-- Menyimpan saldo tersedia (`availableBalance`) dan saldo tertahan (`heldBalance`) per user.
-- Menjalankan operasi top-up dan withdraw.
-- Menjalankan hold fund untuk proses bidding.
-- Menjalankan release hold saat bid kalah/auction batal.
-- Menjalankan capture hold saat pemenang auction ditetapkan.
-- Menyediakan riwayat transaksi dan jejak audit dasar.
+- saldo tersedia (`availableBalance`)
+- saldo tertahan (`heldBalance`)
+- transaksi wallet
+- hold/release/capture fund untuk lifecycle bidding
 
-## Data Ownership
+## Endpoint Publik (via Gateway)
 
-Service ini memiliki ownership untuk:
+- `GET /wallet/balance`
+- `POST /wallet/topup`
+- `GET /wallet/transactions`
 
-- Wallet state per `userId`.
-- Hold state per `holdId` (`HELD`, `RELEASED`, `CAPTURED`).
-- Ledger transaksi wallet.
+## Endpoint Internal
 
-Service lain **dilarang** mengakses database wallet secara langsung. Interaksi harus via API contract.
+- `POST /wallet/internal/hold`
+- `POST /wallet/internal/release`
+- `POST /wallet/internal/capture`
 
-## API Contract (Minimal)
+## Endpoint Structured Wallet API
 
 - `GET /wallets/{userId}/balance`
 - `POST /wallets/{userId}/top-up`
@@ -31,33 +31,22 @@ Service lain **dilarang** mengakses database wallet secara langsung. Interaksi h
 - `POST /wallets/{userId}/holds/{holdId}/capture`
 - `GET /wallets/{userId}/transactions`
 
-## Rencana Idempotency
+## Environment
 
-Idempotency dibutuhkan untuk mencegah duplikasi command saat retry jaringan:
+Lihat `.env.example`.
 
-1. **Hold fund**
-   - Client (bidding command service) wajib mengirim `idempotencyKey` unik per command hold.
-   - Jika key sama dikirim ulang, service mengembalikan hasil hold yang sama tanpa memotong saldo ulang.
-2. **Release hold**
-   - `Idempotency-Key` pada release memastikan hold yang sudah dilepas tidak diproses dua kali.
-3. **Capture hold**
-   - `Idempotency-Key` pada capture memastikan hold yang sama tidak dicapture berulang.
+Variabel utama:
 
-> Implementasi saat ini masih in-memory cache untuk bootstrap. Produksi harus pindah ke penyimpanan persisten (mis. Redis + DB transaction boundary).
+- `PORT` (default `8085`)
+- `JWT_SECRET`, `JWT_EXP_SECONDS`
+- `CORS_ALLOWED_ORIGINS`
 
-## Dependency ke Service Lain
-
-- **bidmart-bidding-command-service**: memanggil endpoint hold/release/capture.
-- **bidmart-gateway**: façade API eksternal selama strangler pattern berjalan.
-- **bidmart-auth-service**: event user registration dapat dipakai untuk wallet provisioning otomatis.
-
-## Run Lokal
+## Local Run
 
 ```bash
+cp .env.example .env
 ./gradlew bootRun
 ```
-
-Default port: `8084`.
 
 ## Test
 
@@ -65,15 +54,9 @@ Default port: `8084`.
 ./gradlew test
 ```
 
-## Coupling yang Masih Harus Diputus
+## Docker
 
-- Dual source saldo dari monolith lama (`app_user` vs `wallet`) belum sepenuhnya dipensiunkan.
-- Kontrak event (auction-won, auction-lost, auction-cancelled) belum final.
-- Audit trail masih basic transaction log, belum append-only immutable store.
-
-## Status Migrasi
-
-- ✅ Scaffold service wallet berdiri di repo terpisah.
-- ✅ Endpoint minimum tersedia.
-- ⚠️ Belum ada persistence DB production-grade.
-- ⚠️ Belum ada distributed lock/outbox untuk exactly-once semantics.
+```bash
+docker build -t bidmart-wallet-service .
+docker run --env-file .env -p 8085:8085 bidmart-wallet-service
+```
