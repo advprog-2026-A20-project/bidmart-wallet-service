@@ -20,4 +20,12 @@ public class HoldRepository {
     public Optional<HoldRecord> findById(UUID holdId) {
         return Optional.ofNullable(holds.get(holdId));
     }
+
+    public Optional<HoldRecord> findActiveByUserIdAndAuctionId(UUID userId, UUID auctionId) {
+        return holds.values().stream()
+                .filter(holdRecord -> holdRecord.getStatus() == HoldRecord.HoldStatus.HELD)
+                .filter(holdRecord -> holdRecord.getUserId().equals(userId))
+                .filter(holdRecord -> auctionId.equals(holdRecord.getAuctionId()))
+                .findFirst();
+    }
 }

@@ -91,7 +91,44 @@ public class WalletService {
         return holdRecord;
     }
 
+    public synchronized HoldRecord holdForAuction(UUID userId, UUID auctionId, BigDecimal amount) {
+        Wallet wallet = walletRepository.findOrCreateByUserId(userId);
+        if (wallet.getAvailableBalance().compareTo(amount) < 0) throw new IllegalArgumentException("Insufficient balance");
+        wallet.hold(amount);
+
+        HoldRecord holdRecord = holdRepository.findActiveByUserIdAndAuctionId(userId, auctionId)
+                .map(existingHold -> {
+                    existingHold.increaseAmount(amount);
+                    return existingHold;
+                })
+                .orElseGet(() -> holdRepository.save(new HoldRecord(UUID.randomUUID(), userId, auctionId, amount)));
+
+        transactionRepository.add(new WalletTransaction(userId, "HOLD", amount, auctionId.toString()));
+        return holdRecord;
+    }
+
+    public synchronized HoldRecord releaseForAuction(UUID userId, UUID auctionId, BigDecimal amount) {
+        HoldRecord holdRecord = findActiveAuctionHold(userId, auctionId);
+        walletRepository.findOrCreateByUserId(userId).release(holdRecord.getAmount());
+        holdRecord.markReleased();
+        transactionRepository.add(new WalletTransaction(userId, "RELEASE", holdRecord.getAmount(), auctionId.toString()));
+        return holdRecord;
+    }
+
+    public synchronized HoldRecord captureForAuction(UUID userId, UUID auctionId, BigDecimal amount) {
+        HoldRecord holdRecord = findActiveAuctionHold(userId, auctionId);
+        walletRepository.findOrCreateByUserId(userId).capture(holdRecord.getAmount());
+        holdRecord.markCaptured();
+        transactionRepository.add(new WalletTransaction(userId, "CAPTURE", holdRecord.getAmount(), auctionId.toString()));
+        return holdRecord;
+    }
+
     public List<WalletTransaction> getTransactions(UUID userId) {
         return transactionRepository.findByUserId(userId);
+    }
+
+    private HoldRecord findActiveAuctionHold(UUID userId, UUID auctionId) {
+        return holdRepository.findActiveByUserIdAndAuctionId(userId, auctionId)
+                .orElseThrow(() -> new IllegalArgumentException("Active hold not found for auction"));
     }
 }
