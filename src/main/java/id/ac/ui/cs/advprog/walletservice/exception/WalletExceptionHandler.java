@@ -18,6 +18,7 @@ public class WalletExceptionHandler {
             case "Insufficient held balance" -> error(HttpStatus.CONFLICT, "INSUFFICIENT_HELD_BALANCE", exception);
             case "Hold ownership mismatch" -> error(HttpStatus.FORBIDDEN, "HOLD_OWNERSHIP_MISMATCH", exception);
             case "Active hold not found for auction" -> error(HttpStatus.NOT_FOUND, "ACTIVE_HOLD_NOT_FOUND", exception);
+            case "Hold amount mismatch" -> error(HttpStatus.CONFLICT, "HOLD_AMOUNT_MISMATCH", exception);
             default -> error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", exception);
         };
     }

@@ -20,10 +20,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 class WalletInternalControllerExceptionHandlerTest {
     private MockMvc mockMvc;
+    private WalletService walletService;
 
     @BeforeEach
     void setUp() {
-        WalletService walletService = new WalletService(
+        walletService = new WalletService(
                 new WalletRepository(),
                 new HoldRepository(),
                 new TransactionRepository()
@@ -62,6 +63,36 @@ class WalletInternalControllerExceptionHandlerTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code", is("ACTIVE_HOLD_NOT_FOUND")))
                 .andExpect(jsonPath("$.message", is("Active hold not found for auction")));
+    }
+
+    @Test
+    void internalReleaseWithMismatchedAmountReturnsConflictError() throws Exception {
+        UUID userId = UUID.randomUUID();
+        UUID auctionId = UUID.randomUUID();
+        walletService.topUp(userId, new java.math.BigDecimal("100000"));
+        walletService.holdForAuction(userId, auctionId, new java.math.BigDecimal("40000"));
+
+        mockMvc.perform(post("/wallet/internal/release")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(internalFundsRequest(userId, auctionId, "30000")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code", is("HOLD_AMOUNT_MISMATCH")))
+                .andExpect(jsonPath("$.message", is("Hold amount mismatch")));
+    }
+
+    @Test
+    void internalCaptureWithMismatchedAmountReturnsConflictError() throws Exception {
+        UUID userId = UUID.randomUUID();
+        UUID auctionId = UUID.randomUUID();
+        walletService.topUp(userId, new java.math.BigDecimal("100000"));
+        walletService.holdForAuction(userId, auctionId, new java.math.BigDecimal("40000"));
+
+        mockMvc.perform(post("/wallet/internal/capture")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(internalFundsRequest(userId, auctionId, "30000")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code", is("HOLD_AMOUNT_MISMATCH")))
+                .andExpect(jsonPath("$.message", is("Hold amount mismatch")));
     }
 
     private String internalFundsRequest(UUID userId, UUID auctionId, String amount) {

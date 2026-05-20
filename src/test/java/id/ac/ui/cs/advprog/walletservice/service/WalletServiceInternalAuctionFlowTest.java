@@ -72,6 +72,24 @@ class WalletServiceInternalAuctionFlowTest {
     }
 
     @Test
+    void releaseForAuctionThrowsWhenRequestedAmountDiffersFromActiveHoldAmount() {
+        UUID userId = UUID.randomUUID();
+        UUID auctionId = UUID.randomUUID();
+        walletService.topUp(userId, new BigDecimal("100000"));
+        walletService.holdForAuction(userId, auctionId, new BigDecimal("40000"));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> walletService.releaseForAuction(userId, auctionId, new BigDecimal("30000"))
+        );
+
+        WalletBalanceResponse balance = walletService.getBalance(userId);
+        assertEquals("Hold amount mismatch", exception.getMessage());
+        assertEquals(new BigDecimal("60000"), balance.availableBalance());
+        assertEquals(new BigDecimal("40000"), balance.heldBalance());
+    }
+
+    @Test
     void captureForAuctionCapturesFullActiveHoldWithoutReturningAvailableBalance() {
         UUID userId = UUID.randomUUID();
         UUID auctionId = UUID.randomUUID();
@@ -86,6 +104,24 @@ class WalletServiceInternalAuctionFlowTest {
         assertEquals(BigDecimal.ZERO, balance.heldBalance());
         assertEquals(new BigDecimal("40000"), capturedHold.getAmount());
         assertEquals(HoldRecord.HoldStatus.CAPTURED, capturedHold.getStatus());
+    }
+
+    @Test
+    void captureForAuctionThrowsWhenRequestedAmountDiffersFromActiveHoldAmount() {
+        UUID userId = UUID.randomUUID();
+        UUID auctionId = UUID.randomUUID();
+        walletService.topUp(userId, new BigDecimal("100000"));
+        walletService.holdForAuction(userId, auctionId, new BigDecimal("40000"));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> walletService.captureForAuction(userId, auctionId, new BigDecimal("30000"))
+        );
+
+        WalletBalanceResponse balance = walletService.getBalance(userId);
+        assertEquals("Hold amount mismatch", exception.getMessage());
+        assertEquals(new BigDecimal("60000"), balance.availableBalance());
+        assertEquals(new BigDecimal("40000"), balance.heldBalance());
     }
 
     @Test

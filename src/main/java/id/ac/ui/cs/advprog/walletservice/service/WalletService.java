@@ -106,6 +106,7 @@ public class WalletService {
 
     public synchronized HoldRecord releaseForAuction(UUID userId, UUID auctionId, BigDecimal amount) {
         HoldRecord holdRecord = findActiveAuctionHold(userId, auctionId);
+        validateRequestedHoldAmount(holdRecord, amount);
         walletRepository.findOrCreateByUserId(userId).release(holdRecord.getAmount());
         holdRecord.markReleased();
         transactionRepository.add(new WalletTransaction(userId, "RELEASE", holdRecord.getAmount(), auctionId.toString()));
@@ -114,6 +115,7 @@ public class WalletService {
 
     public synchronized HoldRecord captureForAuction(UUID userId, UUID auctionId, BigDecimal amount) {
         HoldRecord holdRecord = findActiveAuctionHold(userId, auctionId);
+        validateRequestedHoldAmount(holdRecord, amount);
         walletRepository.findOrCreateByUserId(userId).capture(holdRecord.getAmount());
         holdRecord.markCaptured();
         transactionRepository.add(new WalletTransaction(userId, "CAPTURE", holdRecord.getAmount(), auctionId.toString()));
@@ -127,5 +129,11 @@ public class WalletService {
     private HoldRecord findActiveAuctionHold(UUID userId, UUID auctionId) {
         return holdRepository.findActiveByUserIdAndAuctionId(userId, auctionId)
                 .orElseThrow(() -> new IllegalArgumentException("Active hold not found for auction"));
+    }
+
+    private void validateRequestedHoldAmount(HoldRecord holdRecord, BigDecimal amount) {
+        if (holdRecord.getAmount().compareTo(amount) != 0) {
+            throw new IllegalArgumentException("Hold amount mismatch");
+        }
     }
 }
