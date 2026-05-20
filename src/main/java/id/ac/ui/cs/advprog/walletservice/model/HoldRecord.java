@@ -23,6 +23,7 @@ public class HoldRecord {
     }
 
     public HoldRecord(UUID holdId, UUID userId, UUID auctionId, BigDecimal amount) {
+        validatePositiveAmount(amount);
         this.holdId = holdId;
         this.userId = userId;
         this.auctionId = auctionId;
@@ -38,7 +39,31 @@ public class HoldRecord {
     public HoldStatus getStatus() { return status; }
     public Instant getCreatedAt() { return createdAt; }
 
-    public void increaseAmount(BigDecimal additionalAmount) { this.amount = this.amount.add(additionalAmount); }
-    public void markReleased() { this.status = HoldStatus.RELEASED; }
-    public void markCaptured() { this.status = HoldStatus.CAPTURED; }
+    public void increaseAmount(BigDecimal additionalAmount) {
+        validateHeldStatus();
+        validatePositiveAmount(additionalAmount);
+        this.amount = this.amount.add(additionalAmount);
+    }
+
+    public void markReleased() {
+        validateHeldStatus();
+        this.status = HoldStatus.RELEASED;
+    }
+
+    public void markCaptured() {
+        validateHeldStatus();
+        this.status = HoldStatus.CAPTURED;
+    }
+
+    private void validatePositiveAmount(BigDecimal amount) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Amount must be greater than zero");
+        }
+    }
+
+    private void validateHeldStatus() {
+        if (this.status != HoldStatus.HELD) {
+            throw new IllegalStateException("Hold must be HELD");
+        }
+    }
 }

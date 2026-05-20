@@ -42,7 +42,6 @@ public class WalletService {
 
     public WalletBalanceResponse withdraw(UUID userId, BigDecimal amount) {
         Wallet wallet = walletRepository.findOrCreateByUserId(userId);
-        if (wallet.getAvailableBalance().compareTo(amount) < 0) throw new IllegalArgumentException("Insufficient balance");
         wallet.withdraw(amount);
         transactionRepository.add(new WalletTransaction(userId, "WITHDRAW", amount, "manual"));
         return getBalance(userId);
@@ -53,7 +52,6 @@ public class WalletService {
             return (HoldRecord) idempotencyCache.get(idempotencyKey);
         }
         Wallet wallet = walletRepository.findOrCreateByUserId(userId);
-        if (wallet.getAvailableBalance().compareTo(amount) < 0) throw new IllegalArgumentException("Insufficient balance");
         wallet.hold(amount);
         HoldRecord holdRecord = holdRepository.save(new HoldRecord(UUID.randomUUID(), userId, amount));
         transactionRepository.add(new WalletTransaction(userId, "HOLD", amount, holdRecord.getHoldId().toString()));
@@ -93,7 +91,6 @@ public class WalletService {
 
     public synchronized HoldRecord holdForAuction(UUID userId, UUID auctionId, BigDecimal amount) {
         Wallet wallet = walletRepository.findOrCreateByUserId(userId);
-        if (wallet.getAvailableBalance().compareTo(amount) < 0) throw new IllegalArgumentException("Insufficient balance");
         wallet.hold(amount);
 
         HoldRecord holdRecord = holdRepository.findActiveByUserIdAndAuctionId(userId, auctionId)
