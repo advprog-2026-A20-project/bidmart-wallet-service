@@ -5,22 +5,38 @@ import id.ac.ui.cs.advprog.walletservice.model.HoldRecord;
 import id.ac.ui.cs.advprog.walletservice.repository.HoldRepository;
 import id.ac.ui.cs.advprog.walletservice.repository.TransactionRepository;
 import id.ac.ui.cs.advprog.walletservice.repository.WalletRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
 
 import java.math.BigDecimal;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+@SpringBootTest
 class WalletServiceInternalAuctionFlowTest {
 
-    private final WalletService walletService = new WalletService(
-            new WalletRepository(),
-            new HoldRepository(),
-            new TransactionRepository()
-    );
+    @Autowired
+    private WalletService walletService;
+
+    @Autowired
+    private WalletRepository walletRepository;
+
+    @Autowired
+    private HoldRepository holdRepository;
+
+    @Autowired
+    private TransactionRepository transactionRepository;
+
+    @BeforeEach
+    void setUp() {
+        transactionRepository.deleteAll();
+        holdRepository.deleteAll();
+        walletRepository.deleteAll();
+    }
 
     @Test
     void holdForAuctionMovesAmountFromAvailableBalanceToHeldBalance() {
@@ -31,9 +47,9 @@ class WalletServiceInternalAuctionFlowTest {
         HoldRecord holdRecord = walletService.holdForAuction(userId, auctionId, new BigDecimal("25000"));
 
         WalletBalanceResponse balance = walletService.getBalance(userId);
-        assertEquals(new BigDecimal("75000"), balance.availableBalance());
-        assertEquals(new BigDecimal("25000"), balance.heldBalance());
-        assertEquals(new BigDecimal("25000"), holdRecord.getAmount());
+        assertMoney("75000", balance.availableBalance());
+        assertMoney("25000", balance.heldBalance());
+        assertMoney("25000", holdRecord.getAmount());
         assertEquals(HoldRecord.HoldStatus.HELD, holdRecord.getStatus());
     }
 
@@ -47,10 +63,10 @@ class WalletServiceInternalAuctionFlowTest {
         HoldRecord secondHold = walletService.holdForAuction(userId, auctionId, new BigDecimal("15000"));
 
         WalletBalanceResponse balance = walletService.getBalance(userId);
-        assertSame(firstHold, secondHold);
-        assertEquals(new BigDecimal("60000"), balance.availableBalance());
-        assertEquals(new BigDecimal("40000"), balance.heldBalance());
-        assertEquals(new BigDecimal("40000"), secondHold.getAmount());
+        assertEquals(firstHold.getHoldId(), secondHold.getHoldId());
+        assertMoney("60000", balance.availableBalance());
+        assertMoney("40000", balance.heldBalance());
+        assertMoney("40000", secondHold.getAmount());
         assertEquals(HoldRecord.HoldStatus.HELD, secondHold.getStatus());
     }
 
@@ -65,9 +81,9 @@ class WalletServiceInternalAuctionFlowTest {
         HoldRecord releasedHold = walletService.releaseForAuction(userId, auctionId, new BigDecimal("40000"));
 
         WalletBalanceResponse balance = walletService.getBalance(userId);
-        assertEquals(new BigDecimal("100000"), balance.availableBalance());
-        assertEquals(BigDecimal.ZERO, balance.heldBalance());
-        assertEquals(new BigDecimal("40000"), releasedHold.getAmount());
+        assertMoney("100000", balance.availableBalance());
+        assertMoney("0", balance.heldBalance());
+        assertMoney("40000", releasedHold.getAmount());
         assertEquals(HoldRecord.HoldStatus.RELEASED, releasedHold.getStatus());
     }
 
@@ -85,8 +101,8 @@ class WalletServiceInternalAuctionFlowTest {
 
         WalletBalanceResponse balance = walletService.getBalance(userId);
         assertEquals("Hold amount mismatch", exception.getMessage());
-        assertEquals(new BigDecimal("60000"), balance.availableBalance());
-        assertEquals(new BigDecimal("40000"), balance.heldBalance());
+        assertMoney("60000", balance.availableBalance());
+        assertMoney("40000", balance.heldBalance());
     }
 
     @Test
@@ -100,9 +116,9 @@ class WalletServiceInternalAuctionFlowTest {
         HoldRecord capturedHold = walletService.captureForAuction(userId, auctionId, new BigDecimal("40000"));
 
         WalletBalanceResponse balance = walletService.getBalance(userId);
-        assertEquals(new BigDecimal("60000"), balance.availableBalance());
-        assertEquals(BigDecimal.ZERO, balance.heldBalance());
-        assertEquals(new BigDecimal("40000"), capturedHold.getAmount());
+        assertMoney("60000", balance.availableBalance());
+        assertMoney("0", balance.heldBalance());
+        assertMoney("40000", capturedHold.getAmount());
         assertEquals(HoldRecord.HoldStatus.CAPTURED, capturedHold.getStatus());
     }
 
@@ -117,8 +133,8 @@ class WalletServiceInternalAuctionFlowTest {
                 new BigDecimal("40000")
         );
 
-        assertEquals(new BigDecimal("40000"), balance.availableBalance());
-        assertEquals(BigDecimal.ZERO, balance.heldBalance());
+        assertMoney("40000", balance.availableBalance());
+        assertMoney("0", balance.heldBalance());
     }
 
     @Test
@@ -135,8 +151,8 @@ class WalletServiceInternalAuctionFlowTest {
 
         WalletBalanceResponse balance = walletService.getBalance(userId);
         assertEquals("Hold amount mismatch", exception.getMessage());
-        assertEquals(new BigDecimal("60000"), balance.availableBalance());
-        assertEquals(new BigDecimal("40000"), balance.heldBalance());
+        assertMoney("60000", balance.availableBalance());
+        assertMoney("40000", balance.heldBalance());
     }
 
     @Test
@@ -151,7 +167,11 @@ class WalletServiceInternalAuctionFlowTest {
         );
 
         WalletBalanceResponse balance = walletService.getBalance(userId);
-        assertEquals(new BigDecimal("10000"), balance.availableBalance());
-        assertEquals(BigDecimal.ZERO, balance.heldBalance());
+        assertMoney("10000", balance.availableBalance());
+        assertMoney("0", balance.heldBalance());
+    }
+
+    private void assertMoney(String expected, BigDecimal actual) {
+        assertEquals(0, actual.compareTo(new BigDecimal(expected)));
     }
 }

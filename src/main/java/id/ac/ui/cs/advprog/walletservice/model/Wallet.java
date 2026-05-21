@@ -1,12 +1,32 @@
 package id.ac.ui.cs.advprog.walletservice.model;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.util.UUID;
 
+@Entity
+@Table(name = "wallet")
 public class Wallet {
-    private final UUID userId;
+
+    @Id
+    @Column(nullable = false, updatable = false)
+    private UUID userId;
+
+    @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal availableBalance;
+
+    @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal heldBalance;
+
+    @Version
+    private Long version;
+
+    protected Wallet() {
+    }
 
     public Wallet(UUID userId) {
         this.userId = userId;
@@ -24,6 +44,10 @@ public class Wallet {
 
     public BigDecimal getHeldBalance() {
         return heldBalance;
+    }
+
+    public Long getVersion() {
+        return version;
     }
 
     public void topUp(BigDecimal amount) {
