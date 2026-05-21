@@ -107,6 +107,21 @@ class WalletServiceInternalAuctionFlowTest {
     }
 
     @Test
+    void creditForAuctionAddsAuctionPaymentToSellerAvailableBalance() {
+        UUID sellerId = UUID.randomUUID();
+        UUID auctionId = UUID.randomUUID();
+
+        WalletBalanceResponse balance = walletService.creditForAuction(
+                sellerId,
+                auctionId,
+                new BigDecimal("40000")
+        );
+
+        assertEquals(new BigDecimal("40000"), balance.availableBalance());
+        assertEquals(BigDecimal.ZERO, balance.heldBalance());
+    }
+
+    @Test
     void captureForAuctionThrowsWhenRequestedAmountDiffersFromActiveHoldAmount() {
         UUID userId = UUID.randomUUID();
         UUID auctionId = UUID.randomUUID();

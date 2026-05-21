@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/wallet/internal")
+@RequestMapping({"/wallet/internal", "/internal/wallet"})
 public class WalletInternalController {
     private final WalletService walletService;
 
@@ -35,5 +35,11 @@ public class WalletInternalController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void capture(@Valid @RequestBody WalletInternalFundsRequest request) {
         walletService.captureForAuction(request.userId(), request.auctionId(), request.amount());
+    }
+
+    @PostMapping("/credit")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void credit(@Valid @RequestBody WalletInternalFundsRequest request) {
+        walletService.creditForAuction(request.userId(), request.auctionId(), request.amount());
     }
 }

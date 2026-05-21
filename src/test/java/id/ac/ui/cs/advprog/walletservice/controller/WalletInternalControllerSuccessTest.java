@@ -88,6 +88,22 @@ class WalletInternalControllerSuccessTest {
         assertEquals(BigDecimal.ZERO, balance.heldBalance());
     }
 
+    @Test
+    void internalCreditReturnsNoContentAndAddsSellerAvailableBalance() throws Exception {
+        UUID sellerId = UUID.randomUUID();
+        UUID auctionId = UUID.randomUUID();
+
+        mockMvc.perform(post("/wallet/internal/credit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(internalFundsRequest(sellerId, auctionId, "25000")))
+                .andExpect(status().isNoContent())
+                .andExpect(content().string(""));
+
+        WalletBalanceResponse balance = walletService.getBalance(sellerId);
+        assertEquals(new BigDecimal("25000"), balance.availableBalance());
+        assertEquals(BigDecimal.ZERO, balance.heldBalance());
+    }
+
     private String internalFundsRequest(UUID userId, UUID auctionId, String amount) {
         return """
                 {

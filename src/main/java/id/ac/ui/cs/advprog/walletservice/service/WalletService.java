@@ -122,6 +122,13 @@ public class WalletService {
         return holdRecord;
     }
 
+    public synchronized WalletBalanceResponse creditForAuction(UUID userId, UUID auctionId, BigDecimal amount) {
+        Wallet wallet = walletRepository.findOrCreateByUserId(userId);
+        wallet.topUp(amount);
+        transactionRepository.add(new WalletTransaction(userId, "AUCTION_CREDIT", amount, auctionId.toString()));
+        return getBalance(userId);
+    }
+
     public List<WalletTransaction> getTransactions(UUID userId) {
         return transactionRepository.findByUserId(userId);
     }
