@@ -74,7 +74,6 @@ public class WalletService {
 
     public WalletBalanceResponse withdraw(UUID userId, BigDecimal amount) {
         Wallet wallet = walletRepository.findOrCreateByUserId(userId);
-        if (wallet.getAvailableBalance().compareTo(amount) < 0) throw new ResponseStatusException(HttpStatus.CONFLICT, "Insufficient balance");
         wallet.withdraw(amount);
         transactionRepository.add(new WalletTransaction(userId, "WITHDRAW", amount, "manual"));
         return getBalance(userId);
@@ -85,7 +84,6 @@ public class WalletService {
             return (HoldRecord) idempotencyCache.get(idempotencyKey);
         }
         Wallet wallet = walletRepository.findOrCreateByUserId(userId);
-        if (wallet.getAvailableBalance().compareTo(amount) < 0) throw new ResponseStatusException(HttpStatus.CONFLICT, "Insufficient balance");
         wallet.hold(amount);
         HoldRecord holdRecord = holdRepository.save(new HoldRecord(UUID.randomUUID(), userId, amount));
         transactionRepository.add(new WalletTransaction(userId, "HOLD", amount, holdRecord.getHoldId().toString()));
@@ -123,25 +121,51 @@ public class WalletService {
         return holdRecord;
     }
 
-    public void holdInternal(UUID userId, BigDecimal amount) {
+    public synchronized HoldRecord holdForAuction(UUID userId, UUID auctionId, BigDecimal amount) {
         Wallet wallet = walletRepository.findOrCreateByUserId(userId);
-        if (wallet.getAvailableBalance().compareTo(amount) < 0) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Insufficient balance for this bid");
-        }
         wallet.hold(amount);
+
+        HoldRecord holdRecord = holdRepository.findActiveByUserIdAndAuctionId(userId, auctionId)
+                .map(existingHold -> {
+                    existingHold.increaseAmount(amount);
+                    return existingHold;
+                })
+                .orElseGet(() -> holdRepository.save(new HoldRecord(UUID.randomUUID(), userId, auctionId, amount)));
+
+        transactionRepository.add(new WalletTransaction(userId, "HOLD", amount, auctionId.toString()));
+        return holdRecord;
     }
 
-    public void releaseInternal(UUID userId, BigDecimal amount) {
-        Wallet wallet = walletRepository.findOrCreateByUserId(userId);
-        wallet.release(amount);
+    public synchronized HoldRecord releaseForAuction(UUID userId, UUID auctionId, BigDecimal amount) {
+        HoldRecord holdRecord = findActiveAuctionHold(userId, auctionId);
+        validateRequestedHoldAmount(holdRecord, amount);
+        walletRepository.findOrCreateByUserId(userId).release(holdRecord.getAmount());
+        holdRecord.markReleased();
+        transactionRepository.add(new WalletTransaction(userId, "RELEASE", holdRecord.getAmount(), auctionId.toString()));
+        return holdRecord;
     }
 
-    public void captureInternal(UUID userId, BigDecimal amount) {
-        Wallet wallet = walletRepository.findOrCreateByUserId(userId);
-        wallet.capture(amount);
+    public synchronized HoldRecord captureForAuction(UUID userId, UUID auctionId, BigDecimal amount) {
+        HoldRecord holdRecord = findActiveAuctionHold(userId, auctionId);
+        validateRequestedHoldAmount(holdRecord, amount);
+        walletRepository.findOrCreateByUserId(userId).capture(holdRecord.getAmount());
+        holdRecord.markCaptured();
+        transactionRepository.add(new WalletTransaction(userId, "CAPTURE", holdRecord.getAmount(), auctionId.toString()));
+        return holdRecord;
     }
 
     public List<WalletTransaction> getTransactions(UUID userId) {
         return transactionRepository.findByUserId(userId);
+    }
+
+    private HoldRecord findActiveAuctionHold(UUID userId, UUID auctionId) {
+        return holdRepository.findActiveByUserIdAndAuctionId(userId, auctionId)
+                .orElseThrow(() -> new IllegalArgumentException("Active hold not found for auction"));
+    }
+
+    private void validateRequestedHoldAmount(HoldRecord holdRecord, BigDecimal amount) {
+        if (holdRecord.getAmount().compareTo(amount) != 0) {
+            throw new IllegalArgumentException("Hold amount mismatch");
+        }
     }
 }
