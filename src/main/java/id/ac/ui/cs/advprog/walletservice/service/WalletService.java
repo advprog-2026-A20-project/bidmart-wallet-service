@@ -1,19 +1,23 @@
 package id.ac.ui.cs.advprog.walletservice.service;
 
+import id.ac.ui.cs.advprog.walletservice.dto.TopUpRequest;
+import id.ac.ui.cs.advprog.walletservice.dto.TransactionResponse;
 import id.ac.ui.cs.advprog.walletservice.dto.WalletBalanceResponse;
+import id.ac.ui.cs.advprog.walletservice.dto.WalletResponse;
 import id.ac.ui.cs.advprog.walletservice.model.HoldRecord;
 import id.ac.ui.cs.advprog.walletservice.model.Wallet;
 import id.ac.ui.cs.advprog.walletservice.model.WalletTransaction;
 import id.ac.ui.cs.advprog.walletservice.repository.HoldRepository;
 import id.ac.ui.cs.advprog.walletservice.repository.TransactionRepository;
 import id.ac.ui.cs.advprog.walletservice.repository.WalletRepository;
-import org.springframework.stereotype.Service;
-
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class WalletService {
@@ -31,6 +35,34 @@ public class WalletService {
     public WalletBalanceResponse getBalance(UUID userId) {
         Wallet wallet = walletRepository.findOrCreateByUserId(userId);
         return new WalletBalanceResponse(userId, wallet.getAvailableBalance(), wallet.getHeldBalance());
+    }
+
+    public WalletResponse getPublicWallet(UUID userId) {
+        Wallet wallet = walletRepository.findOrCreateByUserId(userId);
+        return new WalletResponse(userId, wallet.getAvailableBalance(), userId);
+    }
+
+    public WalletResponse topUpPublic(UUID userId, TopUpRequest request) {
+        if (request.amount() == null || request.amount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Amount must be greater than 0");
+        }
+        Wallet wallet = walletRepository.findOrCreateByUserId(userId);
+        wallet.topUp(request.amount());
+        transactionRepository.add(new WalletTransaction(userId, "TOPUP", request.amount(), "manual"));
+        return getPublicWallet(userId);
+    }
+
+    public List<TransactionResponse> getPublicTransactions(UUID userId) {
+        return transactionRepository.findByUserId(userId).stream()
+            .map(t -> new TransactionResponse(
+                t.getTransactionId(),
+                t.getType(),
+                t.getAmount(),
+                walletRepository.findOrCreateByUserId(userId).getAvailableBalance(),
+                t.getReference(),
+                t.getTimestamp()
+            ))
+            .toList();
     }
 
     public WalletBalanceResponse topUp(UUID userId, BigDecimal amount) {
@@ -63,8 +95,8 @@ public class WalletService {
         if (idempotencyKey != null && idempotencyCache.containsKey(idempotencyKey)) {
             return (HoldRecord) idempotencyCache.get(idempotencyKey);
         }
-        HoldRecord holdRecord = holdRepository.findById(holdId).orElseThrow();
-        if (!holdRecord.getUserId().equals(userId)) throw new IllegalArgumentException("Hold ownership mismatch");
+        HoldRecord holdRecord = holdRepository.findById(holdId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Hold not found"));
+        if (!holdRecord.getUserId().equals(userId)) throw new ResponseStatusException(HttpStatus.CONFLICT, "Hold ownership mismatch");
         if (holdRecord.getStatus() == HoldRecord.HoldStatus.HELD) {
             walletRepository.findOrCreateByUserId(userId).release(holdRecord.getAmount());
             holdRecord.markReleased();
@@ -78,8 +110,8 @@ public class WalletService {
         if (idempotencyKey != null && idempotencyCache.containsKey(idempotencyKey)) {
             return (HoldRecord) idempotencyCache.get(idempotencyKey);
         }
-        HoldRecord holdRecord = holdRepository.findById(holdId).orElseThrow();
-        if (!holdRecord.getUserId().equals(userId)) throw new IllegalArgumentException("Hold ownership mismatch");
+        HoldRecord holdRecord = holdRepository.findById(holdId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Hold not found"));
+        if (!holdRecord.getUserId().equals(userId)) throw new ResponseStatusException(HttpStatus.CONFLICT, "Hold ownership mismatch");
         if (holdRecord.getStatus() == HoldRecord.HoldStatus.HELD) {
             walletRepository.findOrCreateByUserId(userId).capture(holdRecord.getAmount());
             holdRecord.markCaptured();
