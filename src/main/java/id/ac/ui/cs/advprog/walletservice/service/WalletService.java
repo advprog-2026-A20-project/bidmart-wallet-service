@@ -39,7 +39,7 @@ public class WalletService {
     public WalletBalanceResponse topUp(UUID userId, BigDecimal amount) {
         Wallet wallet = findOrCreateWallet(userId);
         wallet.topUp(amount);
-        transactionRepository.save(new WalletTransaction(userId, "TOP_UP", amount, "manual"));
+        recordTransaction(wallet, "TOP_UP", amount, "manual");
         return getBalance(userId);
     }
 
@@ -47,7 +47,7 @@ public class WalletService {
     public WalletBalanceResponse withdraw(UUID userId, BigDecimal amount) {
         Wallet wallet = findOrCreateWallet(userId);
         wallet.withdraw(amount);
-        transactionRepository.save(new WalletTransaction(userId, "WITHDRAW", amount, "manual"));
+        recordTransaction(wallet, "WITHDRAW", amount, "manual");
         return getBalance(userId);
     }
 
@@ -59,7 +59,7 @@ public class WalletService {
         Wallet wallet = findOrCreateWallet(userId);
         wallet.hold(amount);
         HoldRecord holdRecord = holdRepository.save(new HoldRecord(UUID.randomUUID(), userId, amount));
-        transactionRepository.save(new WalletTransaction(userId, "HOLD", amount, holdRecord.getHoldId().toString()));
+        recordTransaction(wallet, "HOLD", amount, holdRecord.getHoldId().toString());
         if (idempotencyKey != null) idempotencyCache.put(idempotencyKey, holdRecord);
         return holdRecord;
     }
@@ -72,9 +72,10 @@ public class WalletService {
         HoldRecord holdRecord = holdRepository.findByHoldId(holdId).orElseThrow();
         if (!holdRecord.getUserId().equals(userId)) throw new IllegalArgumentException("Hold ownership mismatch");
         if (holdRecord.getStatus() == HoldRecord.HoldStatus.HELD) {
-            findOrCreateWallet(userId).release(holdRecord.getAmount());
+            Wallet wallet = findOrCreateWallet(userId);
+            wallet.release(holdRecord.getAmount());
             holdRecord.markReleased();
-            transactionRepository.save(new WalletTransaction(userId, "RELEASE", holdRecord.getAmount(), holdId.toString()));
+            recordTransaction(wallet, "RELEASE", holdRecord.getAmount(), holdId.toString());
         }
         if (idempotencyKey != null) idempotencyCache.put(idempotencyKey, holdRecord);
         return holdRecord;
@@ -88,9 +89,10 @@ public class WalletService {
         HoldRecord holdRecord = holdRepository.findByHoldId(holdId).orElseThrow();
         if (!holdRecord.getUserId().equals(userId)) throw new IllegalArgumentException("Hold ownership mismatch");
         if (holdRecord.getStatus() == HoldRecord.HoldStatus.HELD) {
-            findOrCreateWallet(userId).capture(holdRecord.getAmount());
+            Wallet wallet = findOrCreateWallet(userId);
+            wallet.capture(holdRecord.getAmount());
             holdRecord.markCaptured();
-            transactionRepository.save(new WalletTransaction(userId, "CAPTURE", holdRecord.getAmount(), holdId.toString()));
+            recordTransaction(wallet, "CAPTURE", holdRecord.getAmount(), holdId.toString());
         }
         if (idempotencyKey != null) idempotencyCache.put(idempotencyKey, holdRecord);
         return holdRecord;
@@ -108,7 +110,7 @@ public class WalletService {
                 })
                 .orElseGet(() -> holdRepository.save(new HoldRecord(UUID.randomUUID(), userId, auctionId, amount)));
 
-        transactionRepository.save(new WalletTransaction(userId, "HOLD", amount, auctionId.toString()));
+        recordTransaction(wallet, "HOLD", amount, auctionId.toString());
         return holdRecord;
     }
 
@@ -116,9 +118,10 @@ public class WalletService {
     public synchronized HoldRecord releaseForAuction(UUID userId, UUID auctionId, BigDecimal amount) {
         HoldRecord holdRecord = findActiveAuctionHold(userId, auctionId);
         validateRequestedHoldAmount(holdRecord, amount);
-        findOrCreateWallet(userId).release(holdRecord.getAmount());
+        Wallet wallet = findOrCreateWallet(userId);
+        wallet.release(holdRecord.getAmount());
         holdRecord.markReleased();
-        transactionRepository.save(new WalletTransaction(userId, "RELEASE", holdRecord.getAmount(), auctionId.toString()));
+        recordTransaction(wallet, "RELEASE", holdRecord.getAmount(), auctionId.toString());
         return holdRecord;
     }
 
@@ -126,9 +129,10 @@ public class WalletService {
     public synchronized HoldRecord captureForAuction(UUID userId, UUID auctionId, BigDecimal amount) {
         HoldRecord holdRecord = findActiveAuctionHold(userId, auctionId);
         validateRequestedHoldAmount(holdRecord, amount);
-        findOrCreateWallet(userId).capture(holdRecord.getAmount());
+        Wallet wallet = findOrCreateWallet(userId);
+        wallet.capture(holdRecord.getAmount());
         holdRecord.markCaptured();
-        transactionRepository.save(new WalletTransaction(userId, "CAPTURE", holdRecord.getAmount(), auctionId.toString()));
+        recordTransaction(wallet, "CAPTURE", holdRecord.getAmount(), auctionId.toString());
         return holdRecord;
     }
 
@@ -136,7 +140,7 @@ public class WalletService {
     public synchronized WalletBalanceResponse creditForAuction(UUID userId, UUID auctionId, BigDecimal amount) {
         Wallet wallet = findOrCreateWallet(userId);
         wallet.topUp(amount);
-        transactionRepository.save(new WalletTransaction(userId, "AUCTION_CREDIT", amount, auctionId.toString()));
+        recordTransaction(wallet, "AUCTION_CREDIT", amount, auctionId.toString());
         return getBalance(userId);
     }
 
@@ -159,5 +163,16 @@ public class WalletService {
     private Wallet findOrCreateWallet(UUID userId) {
         return walletRepository.findByUserIdForUpdate(userId)
                 .orElseGet(() -> walletRepository.saveAndFlush(new Wallet(userId)));
+    }
+
+    private void recordTransaction(Wallet wallet, String type, BigDecimal amount, String reference) {
+        transactionRepository.save(new WalletTransaction(
+            wallet.getUserId(),
+            type,
+            amount,
+            reference,
+            wallet.getAvailableBalance(),
+            wallet.getHeldBalance()
+        ));
     }
 }
