@@ -9,13 +9,17 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.UUID;
 
+import static id.ac.ui.cs.advprog.walletservice.controller.WalletInternalControllerTestConstants.INTERNAL_CAPTURE_ENDPOINT;
+import static id.ac.ui.cs.advprog.walletservice.controller.WalletInternalControllerTestConstants.INTERNAL_HOLD_ENDPOINT;
+import static id.ac.ui.cs.advprog.walletservice.controller.WalletInternalControllerTestConstants.INTERNAL_RELEASE_ENDPOINT;
+import static id.ac.ui.cs.advprog.walletservice.controller.WalletInternalControllerTestSupport.performInternalPost;
+import static id.ac.ui.cs.advprog.walletservice.controller.WalletInternalControllerTestSupport.performInternalPostWithoutToken;
+import static id.ac.ui.cs.advprog.walletservice.controller.WalletInternalControllerTestSupport.topUpAndHoldForAuction;
 import static org.hamcrest.Matchers.is;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -27,10 +31,6 @@ class WalletInternalControllerExceptionHandlerTest {
     private static final String AMOUNT_30000 = "30000";
     private static final String AMOUNT_40000 = "40000";
     private static final String AMOUNT_100000 = "100000";
-    private static final String INTERNAL_CAPTURE_ENDPOINT = "/wallet/internal/capture";
-    private static final String INTERNAL_HOLD_ENDPOINT = "/wallet/internal/hold";
-    private static final String INTERNAL_RELEASE_ENDPOINT = "/wallet/internal/release";
-    private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
 
     @Autowired
     private MockMvc mockMvc;
@@ -56,10 +56,7 @@ class WalletInternalControllerExceptionHandlerTest {
 
     @Test
     void internalHoldWithInsufficientBalanceReturnsConflictError() throws Exception {
-        mockMvc.perform(post(INTERNAL_HOLD_ENDPOINT)
-                        .header(INTERNAL_TOKEN_HEADER, WalletInternalControllerTestConstants.TEST_INTERNAL_TOKEN)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(internalFundsRequest(UUID.randomUUID(), UUID.randomUUID(), AMOUNT_25000)))
+        performInternalPost(mockMvc, INTERNAL_HOLD_ENDPOINT, UUID.randomUUID(), UUID.randomUUID(), AMOUNT_25000)
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code", is("INSUFFICIENT_BALANCE")))
                 .andExpect(jsonPath("$.message", is("Insufficient balance")));
@@ -67,18 +64,19 @@ class WalletInternalControllerExceptionHandlerTest {
 
     @Test
     void internalEndpointWithoutTokenReturnsUnauthorized() throws Exception {
-        mockMvc.perform(post(INTERNAL_HOLD_ENDPOINT)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(internalFundsRequest(UUID.randomUUID(), UUID.randomUUID(), AMOUNT_25000)))
+        performInternalPostWithoutToken(
+                mockMvc,
+                INTERNAL_HOLD_ENDPOINT,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                AMOUNT_25000
+        )
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
     void internalHoldWithInvalidAmountReturnsBadRequestError() throws Exception {
-        mockMvc.perform(post(INTERNAL_HOLD_ENDPOINT)
-                        .header(INTERNAL_TOKEN_HEADER, WalletInternalControllerTestConstants.TEST_INTERNAL_TOKEN)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(internalFundsRequest(UUID.randomUUID(), UUID.randomUUID(), AMOUNT_0)))
+        performInternalPost(mockMvc, INTERNAL_HOLD_ENDPOINT, UUID.randomUUID(), UUID.randomUUID(), AMOUNT_0)
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code", is("INVALID_AMOUNT")))
                 .andExpect(jsonPath("$.message", is("Amount must be greater than zero")));
@@ -86,10 +84,7 @@ class WalletInternalControllerExceptionHandlerTest {
 
     @Test
     void internalReleaseWithoutActiveHoldReturnsNotFoundError() throws Exception {
-        mockMvc.perform(post(INTERNAL_RELEASE_ENDPOINT)
-                        .header(INTERNAL_TOKEN_HEADER, WalletInternalControllerTestConstants.TEST_INTERNAL_TOKEN)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(internalFundsRequest(UUID.randomUUID(), UUID.randomUUID(), AMOUNT_25000)))
+        performInternalPost(mockMvc, INTERNAL_RELEASE_ENDPOINT, UUID.randomUUID(), UUID.randomUUID(), AMOUNT_25000)
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code", is("ACTIVE_HOLD_NOT_FOUND")))
                 .andExpect(jsonPath("$.message", is("Active hold not found for auction")));
@@ -99,13 +94,9 @@ class WalletInternalControllerExceptionHandlerTest {
     void internalReleaseWithMismatchedAmountReturnsConflictError() throws Exception {
         UUID userId = UUID.randomUUID();
         UUID auctionId = UUID.randomUUID();
-        walletService.topUp(userId, new java.math.BigDecimal(AMOUNT_100000));
-        walletService.holdForAuction(userId, auctionId, new java.math.BigDecimal(AMOUNT_40000));
+        topUpAndHoldForAuction(walletService, userId, auctionId, AMOUNT_100000, AMOUNT_40000);
 
-        mockMvc.perform(post(INTERNAL_RELEASE_ENDPOINT)
-                        .header(INTERNAL_TOKEN_HEADER, WalletInternalControllerTestConstants.TEST_INTERNAL_TOKEN)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(internalFundsRequest(userId, auctionId, AMOUNT_30000)))
+        performInternalPost(mockMvc, INTERNAL_RELEASE_ENDPOINT, userId, auctionId, AMOUNT_30000)
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code", is("HOLD_AMOUNT_MISMATCH")))
                 .andExpect(jsonPath("$.message", is("Hold amount mismatch")));
@@ -115,25 +106,11 @@ class WalletInternalControllerExceptionHandlerTest {
     void internalCaptureWithMismatchedAmountReturnsConflictError() throws Exception {
         UUID userId = UUID.randomUUID();
         UUID auctionId = UUID.randomUUID();
-        walletService.topUp(userId, new java.math.BigDecimal(AMOUNT_100000));
-        walletService.holdForAuction(userId, auctionId, new java.math.BigDecimal(AMOUNT_40000));
+        topUpAndHoldForAuction(walletService, userId, auctionId, AMOUNT_100000, AMOUNT_40000);
 
-        mockMvc.perform(post(INTERNAL_CAPTURE_ENDPOINT)
-                        .header(INTERNAL_TOKEN_HEADER, WalletInternalControllerTestConstants.TEST_INTERNAL_TOKEN)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(internalFundsRequest(userId, auctionId, AMOUNT_30000)))
+        performInternalPost(mockMvc, INTERNAL_CAPTURE_ENDPOINT, userId, auctionId, AMOUNT_30000)
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code", is("HOLD_AMOUNT_MISMATCH")))
                 .andExpect(jsonPath("$.message", is("Hold amount mismatch")));
-    }
-
-    private String internalFundsRequest(UUID userId, UUID auctionId, String amount) {
-        return """
-                {
-                  "userId": "%s",
-                  "auctionId": "%s",
-                  "amount": %s
-                }
-                """.formatted(userId, auctionId, amount);
     }
 }

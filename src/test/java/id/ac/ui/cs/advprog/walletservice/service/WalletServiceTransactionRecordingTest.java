@@ -1,7 +1,5 @@
 package id.ac.ui.cs.advprog.walletservice.service;
 
-import id.ac.ui.cs.advprog.walletservice.dto.WalletBalanceResponse;
-import id.ac.ui.cs.advprog.walletservice.model.WalletTransaction;
 import id.ac.ui.cs.advprog.walletservice.model.WalletTransactionConstants;
 import id.ac.ui.cs.advprog.walletservice.repository.HoldRepository;
 import id.ac.ui.cs.advprog.walletservice.repository.TransactionRepository;
@@ -12,10 +10,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import java.math.BigDecimal;
-import java.util.List;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static id.ac.ui.cs.advprog.walletservice.service.WalletServiceTestAssertions.assertBalance;
+import static id.ac.ui.cs.advprog.walletservice.service.WalletServiceTestAssertions.assertSingleTransaction;
 
 @SpringBootTest
 class WalletServiceTransactionRecordingTest {
@@ -48,21 +46,18 @@ class WalletServiceTransactionRecordingTest {
         UUID userId = UUID.randomUUID();
         BigDecimal amount = new BigDecimal(AMOUNT_10000);
 
-        WalletBalanceResponse balance = walletService.topUp(userId, amount);
+        walletService.topUp(userId, amount);
 
-        assertMoney(AMOUNT_10000, balance.availableBalance());
-        assertMoney(AMOUNT_0, balance.heldBalance());
-
-        List<WalletTransaction> transactions = walletService.getTransactions(userId);
-        assertEquals(1, transactions.size());
-
-        WalletTransaction transaction = transactions.get(0);
-        assertEquals(userId, transaction.getUserId());
-        assertEquals(WalletTransactionConstants.TOP_UP, transaction.getType());
-        assertMoney(AMOUNT_10000, transaction.getAmount());
-        assertEquals(WalletTransactionConstants.MANUAL_REFERENCE, transaction.getReference());
-        assertMoney(AMOUNT_10000, transaction.getAvailableBalanceAfter());
-        assertMoney(AMOUNT_0, transaction.getHeldBalanceAfter());
+        assertBalance(walletService, userId, AMOUNT_10000, AMOUNT_0);
+        assertSingleTransaction(
+                walletService,
+                userId,
+                WalletTransactionConstants.TOP_UP,
+                AMOUNT_10000,
+                WalletTransactionConstants.MANUAL_REFERENCE,
+                AMOUNT_10000,
+                AMOUNT_0
+        );
     }
 
     @Test
@@ -71,24 +66,17 @@ class WalletServiceTransactionRecordingTest {
         walletService.topUp(userId, new BigDecimal(AMOUNT_10000));
         transactionRepository.deleteAll();
 
-        WalletBalanceResponse balance = walletService.withdraw(userId, new BigDecimal(AMOUNT_3000));
+        walletService.withdraw(userId, new BigDecimal(AMOUNT_3000));
 
-        assertMoney(AMOUNT_7000, balance.availableBalance());
-        assertMoney(AMOUNT_0, balance.heldBalance());
-
-        List<WalletTransaction> transactions = walletService.getTransactions(userId);
-        assertEquals(1, transactions.size());
-
-        WalletTransaction transaction = transactions.get(0);
-        assertEquals(userId, transaction.getUserId());
-        assertEquals(WalletTransactionConstants.WITHDRAW, transaction.getType());
-        assertMoney(AMOUNT_3000, transaction.getAmount());
-        assertEquals(WalletTransactionConstants.MANUAL_REFERENCE, transaction.getReference());
-        assertMoney(AMOUNT_7000, transaction.getAvailableBalanceAfter());
-        assertMoney(AMOUNT_0, transaction.getHeldBalanceAfter());
-    }
-
-    private void assertMoney(String expected, BigDecimal actual) {
-        assertEquals(0, actual.compareTo(new BigDecimal(expected)));
+        assertBalance(walletService, userId, AMOUNT_7000, AMOUNT_0);
+        assertSingleTransaction(
+                walletService,
+                userId,
+                WalletTransactionConstants.WITHDRAW,
+                AMOUNT_3000,
+                WalletTransactionConstants.MANUAL_REFERENCE,
+                AMOUNT_7000,
+                AMOUNT_0
+        );
     }
 }
