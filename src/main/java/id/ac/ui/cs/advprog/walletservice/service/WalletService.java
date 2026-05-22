@@ -6,7 +6,6 @@ import id.ac.ui.cs.advprog.walletservice.model.Wallet;
 import id.ac.ui.cs.advprog.walletservice.model.WalletTransaction;
 import id.ac.ui.cs.advprog.walletservice.model.WalletTransactionConstants;
 import id.ac.ui.cs.advprog.walletservice.repository.HoldRepository;
-import id.ac.ui.cs.advprog.walletservice.repository.TransactionRepository;
 import id.ac.ui.cs.advprog.walletservice.repository.WalletRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,13 +20,13 @@ import java.util.concurrent.ConcurrentHashMap;
 public class WalletService {
     private final WalletRepository walletRepository;
     private final HoldRepository holdRepository;
-    private final TransactionRepository transactionRepository;
+    private final WalletTransactionService walletTransactionService;
     private final Map<String, Object> idempotencyCache = new ConcurrentHashMap<>();
 
-    public WalletService(WalletRepository walletRepository, HoldRepository holdRepository, TransactionRepository transactionRepository) {
+    public WalletService(WalletRepository walletRepository, HoldRepository holdRepository, WalletTransactionService walletTransactionService) {
         this.walletRepository = walletRepository;
         this.holdRepository = holdRepository;
-        this.transactionRepository = transactionRepository;
+        this.walletTransactionService = walletTransactionService;
     }
 
     @Transactional
@@ -40,7 +39,7 @@ public class WalletService {
     public WalletBalanceResponse topUp(UUID userId, BigDecimal amount) {
         Wallet wallet = findOrCreateWallet(userId);
         wallet.topUp(amount);
-        recordTransaction(wallet, WalletTransactionConstants.TOP_UP, amount, WalletTransactionConstants.MANUAL_REFERENCE);
+        walletTransactionService.recordTransaction(wallet, WalletTransactionConstants.TOP_UP, amount, WalletTransactionConstants.MANUAL_REFERENCE);
         return getBalance(userId);
     }
 
@@ -48,7 +47,7 @@ public class WalletService {
     public WalletBalanceResponse withdraw(UUID userId, BigDecimal amount) {
         Wallet wallet = findOrCreateWallet(userId);
         wallet.withdraw(amount);
-        recordTransaction(wallet, WalletTransactionConstants.WITHDRAW, amount, WalletTransactionConstants.MANUAL_REFERENCE);
+        walletTransactionService.recordTransaction(wallet, WalletTransactionConstants.WITHDRAW, amount, WalletTransactionConstants.MANUAL_REFERENCE);
         return getBalance(userId);
     }
 
@@ -60,7 +59,7 @@ public class WalletService {
         Wallet wallet = findOrCreateWallet(userId);
         wallet.hold(amount);
         HoldRecord holdRecord = holdRepository.save(new HoldRecord(UUID.randomUUID(), userId, amount));
-        recordTransaction(wallet, WalletTransactionConstants.HOLD, amount, holdRecord.getHoldId().toString());
+        walletTransactionService.recordTransaction(wallet, WalletTransactionConstants.HOLD, amount, holdRecord.getHoldId().toString());
         if (idempotencyKey != null) idempotencyCache.put(idempotencyKey, holdRecord);
         return holdRecord;
     }
@@ -76,7 +75,7 @@ public class WalletService {
             Wallet wallet = findOrCreateWallet(userId);
             wallet.release(holdRecord.getAmount());
             holdRecord.markReleased();
-            recordTransaction(wallet, WalletTransactionConstants.RELEASE, holdRecord.getAmount(), holdId.toString());
+            walletTransactionService.recordTransaction(wallet, WalletTransactionConstants.RELEASE, holdRecord.getAmount(), holdId.toString());
         }
         if (idempotencyKey != null) idempotencyCache.put(idempotencyKey, holdRecord);
         return holdRecord;
@@ -93,7 +92,7 @@ public class WalletService {
             Wallet wallet = findOrCreateWallet(userId);
             wallet.capture(holdRecord.getAmount());
             holdRecord.markCaptured();
-            recordTransaction(wallet, WalletTransactionConstants.CAPTURE, holdRecord.getAmount(), holdId.toString());
+            walletTransactionService.recordTransaction(wallet, WalletTransactionConstants.CAPTURE, holdRecord.getAmount(), holdId.toString());
         }
         if (idempotencyKey != null) idempotencyCache.put(idempotencyKey, holdRecord);
         return holdRecord;
@@ -111,7 +110,7 @@ public class WalletService {
                 })
                 .orElseGet(() -> holdRepository.save(new HoldRecord(UUID.randomUUID(), userId, auctionId, amount)));
 
-        recordTransaction(wallet, WalletTransactionConstants.HOLD, amount, auctionId.toString());
+        walletTransactionService.recordTransaction(wallet, WalletTransactionConstants.HOLD, amount, auctionId.toString());
         return holdRecord;
     }
 
@@ -122,7 +121,7 @@ public class WalletService {
         Wallet wallet = findOrCreateWallet(userId);
         wallet.release(holdRecord.getAmount());
         holdRecord.markReleased();
-        recordTransaction(wallet, WalletTransactionConstants.RELEASE, holdRecord.getAmount(), auctionId.toString());
+        walletTransactionService.recordTransaction(wallet, WalletTransactionConstants.RELEASE, holdRecord.getAmount(), auctionId.toString());
         return holdRecord;
     }
 
@@ -133,7 +132,7 @@ public class WalletService {
         Wallet wallet = findOrCreateWallet(userId);
         wallet.capture(holdRecord.getAmount());
         holdRecord.markCaptured();
-        recordTransaction(wallet, WalletTransactionConstants.CAPTURE, holdRecord.getAmount(), auctionId.toString());
+        walletTransactionService.recordTransaction(wallet, WalletTransactionConstants.CAPTURE, holdRecord.getAmount(), auctionId.toString());
         return holdRecord;
     }
 
@@ -141,13 +140,13 @@ public class WalletService {
     public synchronized WalletBalanceResponse creditForAuction(UUID userId, UUID auctionId, BigDecimal amount) {
         Wallet wallet = findOrCreateWallet(userId);
         wallet.topUp(amount);
-        recordTransaction(wallet, WalletTransactionConstants.AUCTION_CREDIT, amount, auctionId.toString());
+        walletTransactionService.recordTransaction(wallet, WalletTransactionConstants.AUCTION_CREDIT, amount, auctionId.toString());
         return getBalance(userId);
     }
 
     @Transactional(readOnly = true)
     public List<WalletTransaction> getTransactions(UUID userId) {
-        return transactionRepository.findByUserIdOrderByTimestampAsc(userId);
+        return walletTransactionService.getTransactions(userId);
     }
 
     private HoldRecord findActiveAuctionHold(UUID userId, UUID auctionId) {
@@ -166,14 +165,4 @@ public class WalletService {
                 .orElseGet(() -> walletRepository.saveAndFlush(new Wallet(userId)));
     }
 
-    private void recordTransaction(Wallet wallet, String type, BigDecimal amount, String reference) {
-        transactionRepository.save(new WalletTransaction(
-            wallet.getUserId(),
-            type,
-            amount,
-            reference,
-            wallet.getAvailableBalance(),
-            wallet.getHeldBalance()
-        ));
-    }
 }

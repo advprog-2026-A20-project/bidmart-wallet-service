@@ -1,0 +1,36 @@
+package id.ac.ui.cs.advprog.walletservice.service;
+
+import id.ac.ui.cs.advprog.walletservice.model.Wallet;
+import id.ac.ui.cs.advprog.walletservice.model.WalletTransaction;
+import id.ac.ui.cs.advprog.walletservice.repository.TransactionRepository;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.UUID;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+public class WalletTransactionService {
+    private final TransactionRepository transactionRepository;
+
+    public WalletTransactionService(TransactionRepository transactionRepository) {
+        this.transactionRepository = transactionRepository;
+    }
+
+    @Transactional
+    public void recordTransaction(Wallet wallet, String type, BigDecimal amount, String reference) {
+        transactionRepository.save(new WalletTransaction(
+            wallet.getUserId(),
+            type,
+            amount,
+            reference,
+            wallet.getAvailableBalance(),
+            wallet.getHeldBalance()
+        ));
+    }
+
+    @Transactional(readOnly = true)
+    public List<WalletTransaction> getTransactions(UUID userId) {
+        return transactionRepository.findByUserIdOrderByTimestampAsc(userId);
+    }
+}
