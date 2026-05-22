@@ -4,6 +4,7 @@ import id.ac.ui.cs.advprog.walletservice.dto.WalletBalanceResponse;
 import id.ac.ui.cs.advprog.walletservice.model.HoldRecord;
 import id.ac.ui.cs.advprog.walletservice.model.Wallet;
 import id.ac.ui.cs.advprog.walletservice.model.WalletTransaction;
+import id.ac.ui.cs.advprog.walletservice.model.WalletTransactionConstants;
 import id.ac.ui.cs.advprog.walletservice.repository.HoldRepository;
 import id.ac.ui.cs.advprog.walletservice.repository.TransactionRepository;
 import id.ac.ui.cs.advprog.walletservice.repository.WalletRepository;
@@ -39,7 +40,7 @@ public class WalletService {
     public WalletBalanceResponse topUp(UUID userId, BigDecimal amount) {
         Wallet wallet = findOrCreateWallet(userId);
         wallet.topUp(amount);
-        recordTransaction(wallet, "TOP_UP", amount, "manual");
+        recordTransaction(wallet, WalletTransactionConstants.TOP_UP, amount, WalletTransactionConstants.MANUAL_REFERENCE);
         return getBalance(userId);
     }
 
@@ -47,7 +48,7 @@ public class WalletService {
     public WalletBalanceResponse withdraw(UUID userId, BigDecimal amount) {
         Wallet wallet = findOrCreateWallet(userId);
         wallet.withdraw(amount);
-        recordTransaction(wallet, "WITHDRAW", amount, "manual");
+        recordTransaction(wallet, WalletTransactionConstants.WITHDRAW, amount, WalletTransactionConstants.MANUAL_REFERENCE);
         return getBalance(userId);
     }
 
@@ -59,7 +60,7 @@ public class WalletService {
         Wallet wallet = findOrCreateWallet(userId);
         wallet.hold(amount);
         HoldRecord holdRecord = holdRepository.save(new HoldRecord(UUID.randomUUID(), userId, amount));
-        recordTransaction(wallet, "HOLD", amount, holdRecord.getHoldId().toString());
+        recordTransaction(wallet, WalletTransactionConstants.HOLD, amount, holdRecord.getHoldId().toString());
         if (idempotencyKey != null) idempotencyCache.put(idempotencyKey, holdRecord);
         return holdRecord;
     }
@@ -75,7 +76,7 @@ public class WalletService {
             Wallet wallet = findOrCreateWallet(userId);
             wallet.release(holdRecord.getAmount());
             holdRecord.markReleased();
-            recordTransaction(wallet, "RELEASE", holdRecord.getAmount(), holdId.toString());
+            recordTransaction(wallet, WalletTransactionConstants.RELEASE, holdRecord.getAmount(), holdId.toString());
         }
         if (idempotencyKey != null) idempotencyCache.put(idempotencyKey, holdRecord);
         return holdRecord;
@@ -92,7 +93,7 @@ public class WalletService {
             Wallet wallet = findOrCreateWallet(userId);
             wallet.capture(holdRecord.getAmount());
             holdRecord.markCaptured();
-            recordTransaction(wallet, "CAPTURE", holdRecord.getAmount(), holdId.toString());
+            recordTransaction(wallet, WalletTransactionConstants.CAPTURE, holdRecord.getAmount(), holdId.toString());
         }
         if (idempotencyKey != null) idempotencyCache.put(idempotencyKey, holdRecord);
         return holdRecord;
@@ -110,7 +111,7 @@ public class WalletService {
                 })
                 .orElseGet(() -> holdRepository.save(new HoldRecord(UUID.randomUUID(), userId, auctionId, amount)));
 
-        recordTransaction(wallet, "HOLD", amount, auctionId.toString());
+        recordTransaction(wallet, WalletTransactionConstants.HOLD, amount, auctionId.toString());
         return holdRecord;
     }
 
@@ -121,7 +122,7 @@ public class WalletService {
         Wallet wallet = findOrCreateWallet(userId);
         wallet.release(holdRecord.getAmount());
         holdRecord.markReleased();
-        recordTransaction(wallet, "RELEASE", holdRecord.getAmount(), auctionId.toString());
+        recordTransaction(wallet, WalletTransactionConstants.RELEASE, holdRecord.getAmount(), auctionId.toString());
         return holdRecord;
     }
 
@@ -132,7 +133,7 @@ public class WalletService {
         Wallet wallet = findOrCreateWallet(userId);
         wallet.capture(holdRecord.getAmount());
         holdRecord.markCaptured();
-        recordTransaction(wallet, "CAPTURE", holdRecord.getAmount(), auctionId.toString());
+        recordTransaction(wallet, WalletTransactionConstants.CAPTURE, holdRecord.getAmount(), auctionId.toString());
         return holdRecord;
     }
 
@@ -140,7 +141,7 @@ public class WalletService {
     public synchronized WalletBalanceResponse creditForAuction(UUID userId, UUID auctionId, BigDecimal amount) {
         Wallet wallet = findOrCreateWallet(userId);
         wallet.topUp(amount);
-        recordTransaction(wallet, "AUCTION_CREDIT", amount, auctionId.toString());
+        recordTransaction(wallet, WalletTransactionConstants.AUCTION_CREDIT, amount, auctionId.toString());
         return getBalance(userId);
     }
 
