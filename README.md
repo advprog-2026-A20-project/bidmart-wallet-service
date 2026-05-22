@@ -2,7 +2,7 @@
 
 `bidmart-wallet-service` adalah microservice untuk domain saldo dan wallet lifecycle pada BidMart. Service ini dipisahkan dari monolith `Bidmart` dengan pendekatan strangler pattern agar migrasi bisa bertahap tanpa mematikan sistem lama.
 
-## Fungsi Utama
+## Domain Tanggung Jawab
 
 - Menyimpan saldo tersedia (`availableBalance`) dan saldo tertahan (`heldBalance`) per user.
 - Menjalankan operasi top-up dan withdraw.
@@ -11,9 +11,11 @@
 - Menjalankan capture hold saat pemenang auction ditetapkan.
 - Menyediakan riwayat transaksi dan jejak audit dasar.
 
-## Data Ownership
+## Endpoint Publik (via Gateway)
 
-Service ini memiliki ownership untuk:
+- `GET /wallet/balance`
+- `POST /wallet/topup`
+- `GET /wallet/transactions`
 
 - Wallet state per `userId`.
 - Hold state per `holdId` (`HELD`, `RELEASED`, `CAPTURED`).
@@ -84,7 +86,7 @@ Important error codes:
 
 ## Rencana Idempotency
 
-Idempotency dibutuhkan untuk mencegah duplikasi command saat retry jaringan:
+Lihat `.env.example`.
 
 1. **Hold fund**
    - Client public hold dapat mengirim `idempotencyKey` unik per command hold.
@@ -111,6 +113,7 @@ WALLET_SERVICE_BASE_URL=http://localhost:8084
 ## Run Lokal
 
 ```bash
+cp .env.example .env
 ./gradlew bootRun
 ```
 
