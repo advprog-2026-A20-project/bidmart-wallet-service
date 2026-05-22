@@ -208,6 +208,32 @@ class WalletServiceInternalAuctionFlowTest {
     }
 
     @Test
+    void captureForAuctionRecordsAuctionReferenceAndEndingBalances() {
+        UUID userId = UUID.randomUUID();
+        UUID auctionId = UUID.randomUUID();
+        walletService.topUp(userId, new BigDecimal("100000"));
+        walletService.holdForAuction(userId, auctionId, new BigDecimal("30000"));
+        transactionRepository.deleteAll();
+
+        walletService.captureForAuction(userId, auctionId, new BigDecimal("30000"));
+
+        WalletBalanceResponse balance = walletService.getBalance(userId);
+        assertMoney("70000", balance.availableBalance());
+        assertMoney("0", balance.heldBalance());
+
+        List<WalletTransaction> transactions = walletService.getTransactions(userId);
+        assertEquals(1, transactions.size());
+
+        WalletTransaction transaction = transactions.get(0);
+        assertEquals(userId, transaction.getUserId());
+        assertEquals(WalletTransactionConstants.CAPTURE, transaction.getType());
+        assertMoney("30000", transaction.getAmount());
+        assertEquals(auctionId.toString(), transaction.getReference());
+        assertMoney("70000", transaction.getAvailableBalanceAfter());
+        assertMoney("0", transaction.getHeldBalanceAfter());
+    }
+
+    @Test
     void creditForAuctionAddsAuctionPaymentToSellerAvailableBalance() {
         UUID sellerId = UUID.randomUUID();
         UUID auctionId = UUID.randomUUID();
@@ -220,6 +246,32 @@ class WalletServiceInternalAuctionFlowTest {
 
         assertMoney("40000", balance.availableBalance());
         assertMoney("0", balance.heldBalance());
+    }
+
+    @Test
+    void creditForAuctionRecordsAuctionReferenceAndEndingBalances() {
+        UUID userId = UUID.randomUUID();
+        UUID auctionId = UUID.randomUUID();
+
+        WalletBalanceResponse balance = walletService.creditForAuction(
+                userId,
+                auctionId,
+                new BigDecimal("40000")
+        );
+
+        assertMoney("40000", balance.availableBalance());
+        assertMoney("0", balance.heldBalance());
+
+        List<WalletTransaction> transactions = walletService.getTransactions(userId);
+        assertEquals(1, transactions.size());
+
+        WalletTransaction transaction = transactions.get(0);
+        assertEquals(userId, transaction.getUserId());
+        assertEquals(WalletTransactionConstants.AUCTION_CREDIT, transaction.getType());
+        assertMoney("40000", transaction.getAmount());
+        assertEquals(auctionId.toString(), transaction.getReference());
+        assertMoney("40000", transaction.getAvailableBalanceAfter());
+        assertMoney("0", transaction.getHeldBalanceAfter());
     }
 
     @Test
