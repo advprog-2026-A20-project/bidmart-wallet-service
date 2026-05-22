@@ -7,11 +7,15 @@ import id.ac.ui.cs.advprog.walletservice.repository.TransactionRepository;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class WalletTransactionService {
+    private static final Logger logger = LoggerFactory.getLogger(WalletTransactionService.class);
+
     private final TransactionRepository transactionRepository;
 
     public WalletTransactionService(TransactionRepository transactionRepository) {
@@ -20,7 +24,9 @@ public class WalletTransactionService {
 
     @Transactional
     public void recordTransaction(Wallet wallet, String type, BigDecimal amount, String reference) {
-        transactionRepository.save(WalletTransactionFactory.createFrom(wallet, type, amount, reference));
+        WalletTransaction transaction = WalletTransactionFactory.createFrom(wallet, type, amount, reference);
+        transactionRepository.save(transaction);
+        logger.info("Recorded wallet transaction: userId={}, type={}, reference={}", wallet.getUserId(), type, reference);
     }
 
     @Transactional(readOnly = true)
