@@ -74,6 +74,16 @@ class WalletDomainInvariantTest {
     }
 
     @Test
+    void walletWithdrawRejectsAmountLargerThanAvailableBalance() {
+        Wallet wallet = new Wallet(UUID.randomUUID());
+        wallet.topUp(new BigDecimal("10000"));
+
+        assertThrows(IllegalArgumentException.class, () -> wallet.withdraw(new BigDecimal("10001")));
+        assertEquals(new BigDecimal("10000"), wallet.getAvailableBalance());
+        assertEquals(BigDecimal.ZERO, wallet.getHeldBalance());
+    }
+
+    @Test
     void walletReleaseRejectsAmountLargerThanHeldBalance() {
         Wallet wallet = walletWithHeldBalance(new BigDecimal("50000"));
 
