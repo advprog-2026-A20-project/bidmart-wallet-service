@@ -99,6 +99,37 @@ class WalletServiceIdempotencyTest {
         assertMoney("0", transaction.getHeldBalanceAfter());
     }
 
+    @Test
+    void captureReturnsCachedResultAndRecordsTransactionOnceForSameIdempotencyKey() {
+        UUID userId = UUID.randomUUID();
+        String holdIdempotencyKey = "hold-setup-key-" + UUID.randomUUID();
+        String captureIdempotencyKey = "capture-key-" + UUID.randomUUID();
+        walletService.topUp(userId, new BigDecimal("100000"));
+        HoldRecord holdRecord = walletService.hold(userId, new BigDecimal("30000"), holdIdempotencyKey);
+        transactionRepository.deleteAll();
+
+        HoldRecord firstCapture = walletService.capture(userId, holdRecord.getHoldId(), captureIdempotencyKey);
+        HoldRecord secondCapture = walletService.capture(userId, holdRecord.getHoldId(), captureIdempotencyKey);
+
+        assertEquals(firstCapture.getHoldId(), secondCapture.getHoldId());
+        assertEquals(HoldRecord.HoldStatus.CAPTURED, firstCapture.getStatus());
+
+        WalletBalanceResponse balance = walletService.getBalance(userId);
+        assertMoney("70000", balance.availableBalance());
+        assertMoney("0", balance.heldBalance());
+
+        List<WalletTransaction> transactions = walletService.getTransactions(userId);
+        assertEquals(1, transactions.size());
+
+        WalletTransaction transaction = transactions.get(0);
+        assertEquals(userId, transaction.getUserId());
+        assertEquals(WalletTransactionConstants.CAPTURE, transaction.getType());
+        assertMoney("30000", transaction.getAmount());
+        assertEquals(holdRecord.getHoldId().toString(), transaction.getReference());
+        assertMoney("70000", transaction.getAvailableBalanceAfter());
+        assertMoney("0", transaction.getHeldBalanceAfter());
+    }
+
     private void assertMoney(String expected, BigDecimal actual) {
         assertEquals(0, actual.compareTo(new BigDecimal(expected)));
     }
