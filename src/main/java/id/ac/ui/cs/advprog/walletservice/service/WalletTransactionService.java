@@ -2,6 +2,7 @@ package id.ac.ui.cs.advprog.walletservice.service;
 
 import id.ac.ui.cs.advprog.walletservice.model.Wallet;
 import id.ac.ui.cs.advprog.walletservice.model.WalletTransaction;
+import id.ac.ui.cs.advprog.walletservice.model.WalletTransactionFactory;
 import id.ac.ui.cs.advprog.walletservice.repository.TransactionRepository;
 import java.math.BigDecimal;
 import java.util.List;
@@ -19,14 +20,7 @@ public class WalletTransactionService {
 
     @Transactional
     public void recordTransaction(Wallet wallet, String type, BigDecimal amount, String reference) {
-        transactionRepository.save(new WalletTransaction(
-            wallet.getUserId(),
-            type,
-            amount,
-            reference,
-            wallet.getAvailableBalance(),
-            wallet.getHeldBalance()
-        ));
+        transactionRepository.save(WalletTransactionFactory.createFrom(wallet, type, amount, reference));
     }
 
     @Transactional(readOnly = true)
