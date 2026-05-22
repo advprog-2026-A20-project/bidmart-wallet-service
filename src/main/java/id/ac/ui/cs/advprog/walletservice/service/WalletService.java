@@ -156,6 +156,38 @@ public class WalletService {
         return walletTransactionService.getTransactions(userId);
     }
 
+    @Transactional
+    public WalletResponse getPublicWallet(UUID userId) {
+        Wallet wallet = findOrCreateWallet(userId);
+        return new WalletResponse(wallet.getUserId(), wallet.getAvailableBalance(), wallet.getUserId());
+    }
+
+    @Transactional
+    public WalletResponse topUpPublic(UUID userId, TopUpRequest request) {
+        Wallet wallet = findOrCreateWallet(userId);
+        wallet.topUp(request.amount());
+        walletTransactionService.recordTransaction(
+            wallet,
+            WalletTransactionConstants.TOP_UP,
+            request.amount(),
+            WalletTransactionConstants.MANUAL_REFERENCE
+        );
+        return new WalletResponse(wallet.getUserId(), wallet.getAvailableBalance(), wallet.getUserId());
+    }
+
+    @Transactional(readOnly = true)
+    public List<TransactionResponse> getPublicTransactions(UUID userId) {
+        return getTransactions(userId).stream()
+                .map(transaction -> new TransactionResponse(
+                        transaction.getTransactionId(),
+                        transaction.getType(),
+                        transaction.getAmount(),
+                        transaction.getAvailableBalanceAfter(),
+                        transaction.getReference(),
+                        transaction.getTimestamp()
+                ))
+                .toList();
+    }
     private HoldRecord findActiveAuctionHold(UUID userId, UUID auctionId) {
         return holdRepository.findFirstByUserIdAndAuctionIdAndStatus(userId, auctionId, HoldRecord.HoldStatus.HELD)
                 .orElseThrow(() -> new IllegalArgumentException("Active hold not found for auction"));
