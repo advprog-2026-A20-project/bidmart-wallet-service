@@ -42,6 +42,7 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
+    systemProperty 'JWT_SECRET', 'test-secret-for-wallet-service-12345'
     finalizedBy jacocoTestReport
 }
 
