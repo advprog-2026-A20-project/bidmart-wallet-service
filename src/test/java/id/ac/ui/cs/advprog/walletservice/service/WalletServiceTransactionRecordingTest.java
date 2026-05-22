@@ -2,6 +2,7 @@ package id.ac.ui.cs.advprog.walletservice.service;
 
 import id.ac.ui.cs.advprog.walletservice.dto.WalletBalanceResponse;
 import id.ac.ui.cs.advprog.walletservice.model.WalletTransaction;
+import id.ac.ui.cs.advprog.walletservice.model.WalletTransactionConstants;
 import id.ac.ui.cs.advprog.walletservice.repository.HoldRepository;
 import id.ac.ui.cs.advprog.walletservice.repository.TransactionRepository;
 import id.ac.ui.cs.advprog.walletservice.repository.WalletRepository;
@@ -18,6 +19,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @SpringBootTest
 class WalletServiceTransactionRecordingTest {
+    private static final String AMOUNT_0 = "0";
+    private static final String AMOUNT_3000 = "3000";
+    private static final String AMOUNT_7000 = "7000";
+    private static final String AMOUNT_10000 = "10000";
 
     @Autowired
     private WalletService walletService;
@@ -41,46 +46,46 @@ class WalletServiceTransactionRecordingTest {
     @Test
     void topUpRecordsManualTransactionWithEndingBalances() {
         UUID userId = UUID.randomUUID();
-        BigDecimal amount = new BigDecimal("10000");
+        BigDecimal amount = new BigDecimal(AMOUNT_10000);
 
         WalletBalanceResponse balance = walletService.topUp(userId, amount);
 
-        assertMoney("10000", balance.availableBalance());
-        assertMoney("0", balance.heldBalance());
+        assertMoney(AMOUNT_10000, balance.availableBalance());
+        assertMoney(AMOUNT_0, balance.heldBalance());
 
         List<WalletTransaction> transactions = walletService.getTransactions(userId);
         assertEquals(1, transactions.size());
 
         WalletTransaction transaction = transactions.get(0);
         assertEquals(userId, transaction.getUserId());
-        assertEquals("TOP_UP", transaction.getType());
-        assertMoney("10000", transaction.getAmount());
-        assertEquals("manual", transaction.getReference());
-        assertMoney("10000", transaction.getAvailableBalanceAfter());
-        assertMoney("0", transaction.getHeldBalanceAfter());
+        assertEquals(WalletTransactionConstants.TOP_UP, transaction.getType());
+        assertMoney(AMOUNT_10000, transaction.getAmount());
+        assertEquals(WalletTransactionConstants.MANUAL_REFERENCE, transaction.getReference());
+        assertMoney(AMOUNT_10000, transaction.getAvailableBalanceAfter());
+        assertMoney(AMOUNT_0, transaction.getHeldBalanceAfter());
     }
 
     @Test
     void withdrawRecordsManualTransactionWithEndingBalances() {
         UUID userId = UUID.randomUUID();
-        walletService.topUp(userId, new BigDecimal("10000"));
+        walletService.topUp(userId, new BigDecimal(AMOUNT_10000));
         transactionRepository.deleteAll();
 
-        WalletBalanceResponse balance = walletService.withdraw(userId, new BigDecimal("3000"));
+        WalletBalanceResponse balance = walletService.withdraw(userId, new BigDecimal(AMOUNT_3000));
 
-        assertMoney("7000", balance.availableBalance());
-        assertMoney("0", balance.heldBalance());
+        assertMoney(AMOUNT_7000, balance.availableBalance());
+        assertMoney(AMOUNT_0, balance.heldBalance());
 
         List<WalletTransaction> transactions = walletService.getTransactions(userId);
         assertEquals(1, transactions.size());
 
         WalletTransaction transaction = transactions.get(0);
         assertEquals(userId, transaction.getUserId());
-        assertEquals("WITHDRAW", transaction.getType());
-        assertMoney("3000", transaction.getAmount());
-        assertEquals("manual", transaction.getReference());
-        assertMoney("7000", transaction.getAvailableBalanceAfter());
-        assertMoney("0", transaction.getHeldBalanceAfter());
+        assertEquals(WalletTransactionConstants.WITHDRAW, transaction.getType());
+        assertMoney(AMOUNT_3000, transaction.getAmount());
+        assertEquals(WalletTransactionConstants.MANUAL_REFERENCE, transaction.getReference());
+        assertMoney(AMOUNT_7000, transaction.getAvailableBalanceAfter());
+        assertMoney(AMOUNT_0, transaction.getHeldBalanceAfter());
     }
 
     private void assertMoney(String expected, BigDecimal actual) {

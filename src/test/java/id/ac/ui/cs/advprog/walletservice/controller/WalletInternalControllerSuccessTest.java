@@ -21,9 +21,18 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest(properties = "internal.service-token=test-internal-token")
+@SpringBootTest(properties = WalletInternalControllerTestConstants.INTERNAL_SERVICE_TOKEN_PROPERTY)
 @AutoConfigureMockMvc
 class WalletInternalControllerSuccessTest {
+    private static final String AMOUNT_0 = "0";
+    private static final String AMOUNT_25000 = "25000";
+    private static final String AMOUNT_75000 = "75000";
+    private static final String AMOUNT_100000 = "100000";
+    private static final String EMPTY_RESPONSE_BODY = "";
+    private static final String INTERNAL_CAPTURE_ENDPOINT = "/wallet/internal/capture";
+    private static final String INTERNAL_CREDIT_ENDPOINT = "/wallet/internal/credit";
+    private static final String INTERNAL_HOLD_ENDPOINT = "/wallet/internal/hold";
+    private static final String INTERNAL_RELEASE_ENDPOINT = "/wallet/internal/release";
     private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
 
     @Autowired
@@ -52,56 +61,56 @@ class WalletInternalControllerSuccessTest {
     void internalHoldReturnsNoContentAndMovesAvailableBalanceToHeldBalance() throws Exception {
         UUID userId = UUID.randomUUID();
         UUID auctionId = UUID.randomUUID();
-        walletService.topUp(userId, new BigDecimal("100000"));
+        walletService.topUp(userId, new BigDecimal(AMOUNT_100000));
 
-        mockMvc.perform(post("/wallet/internal/hold")
-                        .header(INTERNAL_TOKEN_HEADER, "test-internal-token")
+        mockMvc.perform(post(INTERNAL_HOLD_ENDPOINT)
+                        .header(INTERNAL_TOKEN_HEADER, WalletInternalControllerTestConstants.TEST_INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(internalFundsRequest(userId, auctionId, "25000")))
+                        .content(internalFundsRequest(userId, auctionId, AMOUNT_25000)))
                 .andExpect(status().isNoContent())
-                .andExpect(content().string(""));
+                .andExpect(content().string(EMPTY_RESPONSE_BODY));
 
         WalletBalanceResponse balance = walletService.getBalance(userId);
-        assertMoney("75000", balance.availableBalance());
-        assertMoney("25000", balance.heldBalance());
+        assertMoney(AMOUNT_75000, balance.availableBalance());
+        assertMoney(AMOUNT_25000, balance.heldBalance());
     }
 
     @Test
     void internalReleaseReturnsNoContentAndRestoresHeldBalanceToAvailableBalance() throws Exception {
         UUID userId = UUID.randomUUID();
         UUID auctionId = UUID.randomUUID();
-        walletService.topUp(userId, new BigDecimal("100000"));
-        walletService.holdForAuction(userId, auctionId, new BigDecimal("25000"));
+        walletService.topUp(userId, new BigDecimal(AMOUNT_100000));
+        walletService.holdForAuction(userId, auctionId, new BigDecimal(AMOUNT_25000));
 
-        mockMvc.perform(post("/wallet/internal/release")
-                        .header(INTERNAL_TOKEN_HEADER, "test-internal-token")
+        mockMvc.perform(post(INTERNAL_RELEASE_ENDPOINT)
+                        .header(INTERNAL_TOKEN_HEADER, WalletInternalControllerTestConstants.TEST_INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(internalFundsRequest(userId, auctionId, "25000")))
+                        .content(internalFundsRequest(userId, auctionId, AMOUNT_25000)))
                 .andExpect(status().isNoContent())
-                .andExpect(content().string(""));
+                .andExpect(content().string(EMPTY_RESPONSE_BODY));
 
         WalletBalanceResponse balance = walletService.getBalance(userId);
-        assertMoney("100000", balance.availableBalance());
-        assertMoney("0", balance.heldBalance());
+        assertMoney(AMOUNT_100000, balance.availableBalance());
+        assertMoney(AMOUNT_0, balance.heldBalance());
     }
 
     @Test
     void internalCaptureReturnsNoContentAndDoesNotRestoreCapturedBalance() throws Exception {
         UUID userId = UUID.randomUUID();
         UUID auctionId = UUID.randomUUID();
-        walletService.topUp(userId, new BigDecimal("100000"));
-        walletService.holdForAuction(userId, auctionId, new BigDecimal("25000"));
+        walletService.topUp(userId, new BigDecimal(AMOUNT_100000));
+        walletService.holdForAuction(userId, auctionId, new BigDecimal(AMOUNT_25000));
 
-        mockMvc.perform(post("/wallet/internal/capture")
-                        .header(INTERNAL_TOKEN_HEADER, "test-internal-token")
+        mockMvc.perform(post(INTERNAL_CAPTURE_ENDPOINT)
+                        .header(INTERNAL_TOKEN_HEADER, WalletInternalControllerTestConstants.TEST_INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(internalFundsRequest(userId, auctionId, "25000")))
+                        .content(internalFundsRequest(userId, auctionId, AMOUNT_25000)))
                 .andExpect(status().isNoContent())
-                .andExpect(content().string(""));
+                .andExpect(content().string(EMPTY_RESPONSE_BODY));
 
         WalletBalanceResponse balance = walletService.getBalance(userId);
-        assertMoney("75000", balance.availableBalance());
-        assertMoney("0", balance.heldBalance());
+        assertMoney(AMOUNT_75000, balance.availableBalance());
+        assertMoney(AMOUNT_0, balance.heldBalance());
     }
 
     @Test
@@ -109,16 +118,16 @@ class WalletInternalControllerSuccessTest {
         UUID sellerId = UUID.randomUUID();
         UUID auctionId = UUID.randomUUID();
 
-        mockMvc.perform(post("/wallet/internal/credit")
-                        .header(INTERNAL_TOKEN_HEADER, "test-internal-token")
+        mockMvc.perform(post(INTERNAL_CREDIT_ENDPOINT)
+                        .header(INTERNAL_TOKEN_HEADER, WalletInternalControllerTestConstants.TEST_INTERNAL_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(internalFundsRequest(sellerId, auctionId, "25000")))
+                        .content(internalFundsRequest(sellerId, auctionId, AMOUNT_25000)))
                 .andExpect(status().isNoContent())
-                .andExpect(content().string(""));
+                .andExpect(content().string(EMPTY_RESPONSE_BODY));
 
         WalletBalanceResponse balance = walletService.getBalance(sellerId);
-        assertMoney("25000", balance.availableBalance());
-        assertMoney("0", balance.heldBalance());
+        assertMoney(AMOUNT_25000, balance.availableBalance());
+        assertMoney(AMOUNT_0, balance.heldBalance());
     }
 
     private void assertMoney(String expected, BigDecimal actual) {
