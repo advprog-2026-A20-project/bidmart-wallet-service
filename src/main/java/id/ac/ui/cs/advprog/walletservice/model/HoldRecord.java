@@ -1,9 +1,18 @@
 package id.ac.ui.cs.advprog.walletservice.model;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
+@Entity
+@Table(name = "wallet_hold")
 public class HoldRecord {
     public enum HoldStatus {
         HELD,
@@ -11,12 +20,31 @@ public class HoldRecord {
         CAPTURED
     }
 
-    private final UUID holdId;
-    private final UUID userId;
-    private final UUID auctionId;
+    @Id
+    @Column(nullable = false, updatable = false)
+    private UUID holdId;
+
+    @Column(nullable = false)
+    private UUID userId;
+
+    @Column
+    private UUID auctionId;
+
+    @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal amount;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private HoldStatus status;
-    private final Instant createdAt;
+
+    @Column(nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @Version
+    private Long version;
+
+    protected HoldRecord() {
+    }
 
     public HoldRecord(UUID holdId, UUID userId, BigDecimal amount) {
         this(holdId, userId, null, amount);
@@ -38,6 +66,7 @@ public class HoldRecord {
     public BigDecimal getAmount() { return amount; }
     public HoldStatus getStatus() { return status; }
     public Instant getCreatedAt() { return createdAt; }
+    public Long getVersion() { return version; }
 
     public void increaseAmount(BigDecimal additionalAmount) {
         validateHeldStatus();

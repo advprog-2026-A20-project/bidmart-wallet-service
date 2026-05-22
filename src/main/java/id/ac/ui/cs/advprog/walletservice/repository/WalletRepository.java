@@ -1,17 +1,17 @@
 package id.ac.ui.cs.advprog.walletservice.repository;
 
 import id.ac.ui.cs.advprog.walletservice.model.Wallet;
-import org.springframework.stereotype.Repository;
-
-import java.util.Map;
+import jakarta.persistence.LockModeType;
+import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
-@Repository
-public class WalletRepository {
-    private final Map<UUID, Wallet> wallets = new ConcurrentHashMap<>();
+public interface WalletRepository extends JpaRepository<Wallet, UUID> {
 
-    public Wallet findOrCreateByUserId(UUID userId) {
-        return wallets.computeIfAbsent(userId, Wallet::new);
-    }
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select w from Wallet w where w.userId = :userId")
+    Optional<Wallet> findByUserIdForUpdate(@Param("userId") UUID userId);
 }

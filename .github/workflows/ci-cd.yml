@@ -36,8 +36,8 @@ jobs:
       - name: Ensure Gradle wrapper is executable
         run: chmod +x ./gradlew
 
-      - name: Run unit tests
-        run: ./gradlew test
+      - name: Run unit tests and generate coverage report
+        run: ./gradlew clean test jacocoTestReport
 
       - name: SonarQube Cloud scan
         uses: SonarSource/sonarqube-scan-action@fd88b7d7ccbaefd23d8f36f73b59db7a3d246602 # v6
@@ -49,6 +49,10 @@ jobs:
             -Dsonar.projectKey=${{ env.SONAR_PROJECT_KEY }}
             -Dsonar.organization=${{ env.SONAR_ORGANIZATION }}
             -Dsonar.java.binaries=build/classes
+            -Dsonar.sources=src/main/java
+            -Dsonar.tests=src/test/java
+            -Dsonar.coverage.jacoco.xmlReportPaths=build/reports/jacoco/test/jacocoTestReport.xml
+            -Dsonar.cpd.exclusions=src/test/**
 
       - name: SonarQube Cloud quality gate
         uses: SonarSource/sonarqube-quality-gate-action@cf038b0e0cdecfa9e56c198bbb7d21d751d62c3b # v1.2.0
