@@ -172,6 +172,60 @@ Invoke-WebRequest `
 - Kontrak event (`auction-won`, `auction-lost`, `auction-cancelled`) belum final.
 - Audit trail masih basic transaction log, belum append-only immutable store.
 
+## Profiling and Logging
+
+Profiling dan logging membantu memastikan operasi wallet tetap benar, mudah diobservasi, dan responsif pada flow normal maupun retry. Area utama yang perlu diamati:
+
+- Top up wallet.
+- Withdraw wallet.
+- Hold funds untuk bid/internal flow.
+- Release funds.
+- Capture funds.
+- Auction credit.
+- Retrieval riwayat transaksi.
+
+`WalletTransactionService` mencatat log info setelah transaksi wallet berhasil disimpan. Log ini berisi `userId`, transaction type, dan reference. Log sengaja tidak menyertakan token, password, secret, raw request headers, full object dumps, database URL, atau transaction amount.
+
+Skenario profiling/performance yang disarankan:
+
+- Repeated top up requests.
+- Repeated bid/hold requests, termasuk retry dengan idempotency key yang sama.
+- Release/capture retry dengan idempotency key yang sama.
+- Retrieval transaction history untuk user dengan jumlah transaksi bertambah.
+- Mixed wallet flow: top up, hold, release, hold, capture, dan auction credit.
+
+Metrik yang disarankan:
+
+- Response time.
+- Throughput.
+- Error rate.
+- JVM memory usage.
+- Database latency atau query time jika tersedia.
+- Konsistensi jumlah transaksi setelah retry.
+
+Tools yang bisa dipakai:
+
+- `./gradlew clean test` atau `.\gradlew.bat clean test` untuk regression check.
+- Application logs untuk bukti transaction recording.
+- Spring Boot Actuator jika enabled.
+- JMeter untuk HTTP load testing.
+- Java Flight Recorder atau IDE profiler untuk profiling JVM.
+
+Frontend smoke check ringan:
+
+- Login.
+- Top up wallet.
+- Perform bid.
+- Check wallet balance.
+- Inspect wallet service logs untuk event transaction recording.
+
+Limitasi saat ini:
+
+- Bukti profiling masih lightweight, belum full benchmark.
+- Logging membantu observability, tetapi bukan distributed tracing.
+- Idempotency cache masih in-memory dan cocok untuk satu instance service saja sampai di-upgrade.
+- Observability production-grade dapat membutuhkan persistent idempotency record, trace ID, dan cross-service correlation.
+
 ## Status Migrasi
 
 - OK: Scaffold service wallet berdiri di repo terpisah.
