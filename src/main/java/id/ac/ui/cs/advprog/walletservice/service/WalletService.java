@@ -12,21 +12,25 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class WalletService {
     private final WalletRepository walletRepository;
     private final HoldRepository holdRepository;
     private final WalletTransactionService walletTransactionService;
-    private final Map<String, Object> idempotencyCache = new ConcurrentHashMap<>();
+    private final WalletIdempotencyService walletIdempotencyService;
 
-    public WalletService(WalletRepository walletRepository, HoldRepository holdRepository, WalletTransactionService walletTransactionService) {
+    public WalletService(
+        WalletRepository walletRepository,
+        HoldRepository holdRepository,
+        WalletTransactionService walletTransactionService,
+        WalletIdempotencyService walletIdempotencyService
+    ) {
         this.walletRepository = walletRepository;
         this.holdRepository = holdRepository;
         this.walletTransactionService = walletTransactionService;
+        this.walletIdempotencyService = walletIdempotencyService;
     }
 
     @Transactional
@@ -53,22 +57,22 @@ public class WalletService {
 
     @Transactional
     public HoldRecord hold(UUID userId, BigDecimal amount, String idempotencyKey) {
-        if (idempotencyKey != null && idempotencyCache.containsKey(idempotencyKey)) {
-            return (HoldRecord) idempotencyCache.get(idempotencyKey);
-        }
+        HoldRecord cachedHoldRecord = walletIdempotencyService.getCachedHoldRecord(idempotencyKey).orElse(null);
+        if (cachedHoldRecord != null) return cachedHoldRecord;
+
         Wallet wallet = findOrCreateWallet(userId);
         wallet.hold(amount);
         HoldRecord holdRecord = holdRepository.save(new HoldRecord(UUID.randomUUID(), userId, amount));
         walletTransactionService.recordTransaction(wallet, WalletTransactionConstants.HOLD, amount, holdRecord.getHoldId().toString());
-        if (idempotencyKey != null) idempotencyCache.put(idempotencyKey, holdRecord);
+        walletIdempotencyService.cacheHoldRecord(idempotencyKey, holdRecord);
         return holdRecord;
     }
 
     @Transactional
     public HoldRecord release(UUID userId, UUID holdId, String idempotencyKey) {
-        if (idempotencyKey != null && idempotencyCache.containsKey(idempotencyKey)) {
-            return (HoldRecord) idempotencyCache.get(idempotencyKey);
-        }
+        HoldRecord cachedHoldRecord = walletIdempotencyService.getCachedHoldRecord(idempotencyKey).orElse(null);
+        if (cachedHoldRecord != null) return cachedHoldRecord;
+
         HoldRecord holdRecord = holdRepository.findByHoldId(holdId).orElseThrow();
         if (!holdRecord.getUserId().equals(userId)) throw new IllegalArgumentException("Hold ownership mismatch");
         if (holdRecord.getStatus() == HoldRecord.HoldStatus.HELD) {
@@ -77,15 +81,15 @@ public class WalletService {
             holdRecord.markReleased();
             walletTransactionService.recordTransaction(wallet, WalletTransactionConstants.RELEASE, holdRecord.getAmount(), holdId.toString());
         }
-        if (idempotencyKey != null) idempotencyCache.put(idempotencyKey, holdRecord);
+        walletIdempotencyService.cacheHoldRecord(idempotencyKey, holdRecord);
         return holdRecord;
     }
 
     @Transactional
     public HoldRecord capture(UUID userId, UUID holdId, String idempotencyKey) {
-        if (idempotencyKey != null && idempotencyCache.containsKey(idempotencyKey)) {
-            return (HoldRecord) idempotencyCache.get(idempotencyKey);
-        }
+        HoldRecord cachedHoldRecord = walletIdempotencyService.getCachedHoldRecord(idempotencyKey).orElse(null);
+        if (cachedHoldRecord != null) return cachedHoldRecord;
+
         HoldRecord holdRecord = holdRepository.findByHoldId(holdId).orElseThrow();
         if (!holdRecord.getUserId().equals(userId)) throw new IllegalArgumentException("Hold ownership mismatch");
         if (holdRecord.getStatus() == HoldRecord.HoldStatus.HELD) {
@@ -94,7 +98,7 @@ public class WalletService {
             holdRecord.markCaptured();
             walletTransactionService.recordTransaction(wallet, WalletTransactionConstants.CAPTURE, holdRecord.getAmount(), holdId.toString());
         }
-        if (idempotencyKey != null) idempotencyCache.put(idempotencyKey, holdRecord);
+        walletIdempotencyService.cacheHoldRecord(idempotencyKey, holdRecord);
         return holdRecord;
     }
 
